@@ -1,0 +1,34 @@
+version: '3.8'
+
+# Docker Compose файл для запуска только бота
+# Используй этот файл, если у тебя уже есть PostgreSQL
+
+services:
+  # Telegram бот
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yatrackerhelper_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    # DATABASE_URL берется из .env файла
+    # Формат: postgresql+asyncpg://user:password@host:port/database
+    # Пример: postgresql+asyncpg://myuser:mypass@192.168.1.100:5432/yatrackerhelper
+
+    # Если PostgreSQL на host машине, используй:
+    # - Windows/Mac: host.docker.internal
+    # - Linux: 172.17.0.1 (или используй network_mode: "host")
+
+    # Логирование
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Для Linux: если PostgreSQL на host машине, раскомментируй:
+# networks:
+#   default:
+#     driver: bridge

@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: yatrackerhelper_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: yatrackerhelper
+      POSTGRES_USER: yatrackerhelper
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yatrackerhelper"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - yatrackerhelper_network
+
+  # Telegram бот
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yatrackerhelper_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Переопределяем DATABASE_URL для использования внутреннего имени контейнера
+      DATABASE_URL: postgresql+asyncpg://yatrackerhelper:${DB_PASSWORD:-changeme}@postgres:5432/yatrackerhelper
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - yatrackerhelper_network
+    # Логирование
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  yatrackerhelper_network:
+    driver: bridge

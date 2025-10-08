@@ -1,0 +1,7 @@
+aiogram>=3.22.0
+aiogram-dialog>=2.4.0
+alembic>=1.16.5
+asyncpg>=0.30.0
+python-dotenv>=1.1.1
+sqlalchemy>=2.0.43
+yatrackerapi==2.1.3

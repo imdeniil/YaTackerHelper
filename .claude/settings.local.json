@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv init:*)",
+      "Bash(uv add:*)",
+      "Bash(claude mcp add:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "Bash(mkdir:*)",
+      "Bash(dir:*)",
+      "Bash(uv sync:*)",
+      "Bash(python:*)",
+      "Bash(uv run:*)",
+      "Bash(Select-String -Pattern \"Тест 2\" -Context 0,30)",
+      "Bash(Select-String -Path \"test_debug.log\" -Pattern \"Найдено проектов:|Фильтруем|шаблон\" -Context 0,2)",
+      "WebSearch",
+      "WebFetch(domain:cloud.yandex.com)",
+      "WebFetch(domain:yandex.cloud)",
+      "WebFetch(domain:yandex.ru)",
+      "Bash(if not exist botdatabase mkdir botdatabase)",
+      "Bash(uv remove:*)",
+      "Bash(Select-String -Pattern \"portfolio\" -Context 2,2)",
+      "Bash(findstr:*)",
+      "Bash(timeout:*)",
+      "Bash(powershell:*)",
+      "Bash(del \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\docs\\PROJECT_CLONING_FIX.md\")",
+      "Bash(del:*)",
+      "Bash(uv lock:*)",
+      "Bash(copy:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
