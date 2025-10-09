@@ -170,10 +170,10 @@ async def on_delete_user_confirm(callback: CallbackQuery, button: Button, manage
         deleted = await UserCRUD.delete_user(session, int(user_id))
 
     if deleted:
-        await callback.answer("✅ Пользователь удален", show_alert=True)
+        await callback.answer("✅ Пользователь удален")
         await on_switch_to_list(callback, button, manager)
     else:
-        await callback.answer("❌ Ошибка удаления", show_alert=True)
+        await callback.answer("❌ Ошибка удаления")
 
 
 async def on_switch_to_delete(callback: CallbackQuery, button: Button, manager: DialogManager):
@@ -430,7 +430,7 @@ user_management_window = Window(
     Format(
         "➕ <b>Создание пользователя</b>\n\n"
         "Шаг 1/3: Введите Telegram username:\n"
-        "<i>Например: @Nata3D1040 или Nata3D1040</i>",
+        "<i>Например: @example или example</i>",
         when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "username",
     ),
 
