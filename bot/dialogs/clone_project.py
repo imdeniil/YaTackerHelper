@@ -1,6 +1,7 @@
 """Диалог для клонирования проекта."""
 
 import asyncio
+import time
 from operator import itemgetter
 from aiogram import F
 from aiogram.types import Message, CallbackQuery
@@ -334,8 +335,14 @@ async def clone_project_background_with_manager(
         async with TrackerClient() as tracker:
             cloner = ProjectCloner(tracker)
 
+            # Throttling: минимальный интервал между обновлениями UI (1 секунда)
+            last_update_time = 0.0
+            UPDATE_INTERVAL = 1.0
+
             # Callback для обновления прогресса (этап 1: получение данных = 0-50%)
             async def progress_update(value: float):
+                nonlocal last_update_time
+
                 # Масштабируем прогресс: 0-100% fetch -> 0-50% общий
                 total_progress = value * 0.5
 
@@ -353,12 +360,15 @@ async def clone_project_background_with_manager(
                 else:
                     phase = "🔍 Проверка связанных задач..."
 
-                # Обновляем через manager.update() вместо bot.edit_message_text()
-                await manager.update({
-                    "is_cloning": True,
-                    "progress": int(total_progress),
-                    "phase": phase,
-                })
+                # Throttling: обновляем UI только раз в секунду или при завершении
+                current_time = time.time()
+                if current_time - last_update_time >= UPDATE_INTERVAL or value >= 100:
+                    last_update_time = current_time
+                    await manager.update({
+                        "is_cloning": True,
+                        "progress": int(total_progress),
+                        "phase": phase,
+                    })
 
             cloner.set_progress_callback(progress_update)
 
@@ -367,6 +377,8 @@ async def clone_project_background_with_manager(
 
             # Callback для клонирования (этап 2: клонирование = 50-100%)
             async def clone_progress_update(value: float):
+                nonlocal last_update_time
+
                 # Масштабируем прогресс: 0-100% clone -> 50-100% общий
                 total_progress = 50 + value * 0.5
 
@@ -383,11 +395,15 @@ async def clone_project_background_with_manager(
                 else:
                     phase = "💬 Восстановление комментариев..."
 
-                await manager.update({
-                    "is_cloning": True,
-                    "progress": int(total_progress),
-                    "phase": phase,
-                })
+                # Throttling: обновляем UI только раз в секунду или при завершении
+                current_time = time.time()
+                if current_time - last_update_time >= UPDATE_INTERVAL or value >= 100:
+                    last_update_time = current_time
+                    await manager.update({
+                        "is_cloning": True,
+                        "progress": int(total_progress),
+                        "phase": phase,
+                    })
 
             cloner.set_progress_callback(clone_progress_update)
 
