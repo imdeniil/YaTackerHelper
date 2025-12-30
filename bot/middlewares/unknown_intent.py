@@ -31,19 +31,25 @@ async def handle_unknown_intent(event: ErrorEvent):
     logger.warning(f"UnknownIntent error for user {callback.from_user.id}: {event.exception}")
 
     try:
-        # Пытаемся удалить старое сообщение с устаревшими кнопками
-        await callback.message.delete()
-    except Exception as delete_error:
-        logger.debug(f"Could not delete old message: {delete_error}")
-
-    # Отправляем новое сообщение
-    try:
-        await callback.message.answer(
-            "⚠️ <b>Это окно устарело</b>\n\n"
-            "Используйте команду /start для возврата в главное меню."
+        # Редактируем сообщение и удаляем кнопки
+        await callback.message.edit_text(
+            text=(
+                "⚠️ <b>Это окно устарело</b>\n\n"
+                "Используйте команду /start для возврата в главное меню."
+            ),
+            reply_markup=None  # Удаляем кнопки
         )
-    except Exception as msg_error:
-        logger.error(f"Error sending fallback message: {msg_error}")
+    except Exception as edit_error:
+        logger.error(f"Error editing message: {edit_error}")
+        # Если не удалось отредактировать - пробуем удалить и отправить новое
+        try:
+            await callback.message.delete()
+            await callback.message.answer(
+                "⚠️ <b>Это окно устарело</b>\n\n"
+                "Используйте команду /start для возврата в главное меню."
+            )
+        except Exception:
+            pass
 
     # Отвечаем на callback чтобы убрать "часики" в Telegram
     try:
