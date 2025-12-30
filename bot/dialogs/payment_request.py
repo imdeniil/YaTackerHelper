@@ -106,16 +106,22 @@ async def on_title_input(message: Message, widget: MessageInput, manager: Dialog
     """Обработчик ввода названия"""
     if not message.text:
         manager.dialog_data["error"] = "❌ Пожалуйста, отправьте текстовое сообщение"
+        manager.show_mode = ShowMode.EDIT
+        await manager.switch_to(PaymentRequestCreation.enter_title)
         return
 
     title = message.text.strip()
 
     if not title:
         manager.dialog_data["error"] = "❌ Название не может быть пустым. Попробуйте еще раз:"
+        manager.show_mode = ShowMode.EDIT
+        await manager.switch_to(PaymentRequestCreation.enter_title)
         return
 
     if len(title) > 200:
         manager.dialog_data["error"] = "❌ Название слишком длинное (максимум 200 символов). Попробуйте еще раз:"
+        manager.show_mode = ShowMode.EDIT
+        await manager.switch_to(PaymentRequestCreation.enter_title)
         return
 
     # Успешная валидация - очищаем ошибку и переходим дальше
@@ -129,6 +135,8 @@ async def on_amount_input(message: Message, widget: MessageInput, manager: Dialo
     """Обработчик ввода суммы"""
     if not message.text:
         manager.dialog_data["error"] = "❌ Пожалуйста, отправьте текстовое сообщение"
+        manager.show_mode = ShowMode.EDIT
+        await manager.switch_to(PaymentRequestCreation.enter_amount)
         return
 
     amount = message.text.strip()
@@ -140,6 +148,8 @@ async def on_amount_input(message: Message, widget: MessageInput, manager: Dialo
             raise ValueError("Amount must be positive")
     except ValueError:
         manager.dialog_data["error"] = "❌ Некорректная сумма. Введите число больше 0 (например: 5000 или 5000.50):"
+        manager.show_mode = ShowMode.EDIT
+        await manager.switch_to(PaymentRequestCreation.enter_amount)
         return
 
     # Успешная валидация - очищаем ошибку и переходим дальше
@@ -153,12 +163,16 @@ async def on_comment_input(message: Message, widget: MessageInput, manager: Dial
     """Обработчик ввода комментария"""
     if not message.text:
         manager.dialog_data["error"] = "❌ Пожалуйста, отправьте текстовое сообщение или нажмите кнопку Пропустить"
+        manager.show_mode = ShowMode.EDIT
+        await manager.switch_to(PaymentRequestCreation.enter_comment)
         return
 
     comment = message.text.strip()
 
     if len(comment) > 1000:
         manager.dialog_data["error"] = "❌ Комментарий слишком длинный (максимум 1000 символов). Попробуйте еще раз:"
+        manager.show_mode = ShowMode.EDIT
+        await manager.switch_to(PaymentRequestCreation.enter_comment)
         return
 
     # Успешная валидация - очищаем ошибку и переходим дальше
