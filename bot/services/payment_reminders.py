@@ -153,12 +153,15 @@ async def send_reminder_scheduled_date(bot: Bot):
 
 
 async def rollover_scheduled_today(bot: Bot):
-    """Переносит неоплаченные SCHEDULED_TODAY на следующий день в 00:01 МСК
+    """Проверяет неоплаченные SCHEDULED_TODAY в 10:00 МСК
 
-    Проверяет все запросы со статусом SCHEDULED_TODAY и если они не оплачены
-    до полуночи, оставляет статус SCHEDULED_TODAY и уведомляет Worker и billing контакта.
+    Проверяет все запросы со статусом SCHEDULED_TODAY:
+    - Если запрос создан сегодня (первый день) - уведомляет Worker и billing
+    - Если запрос создан вчера или раньше (второй день+) - АВТОМАТИЧЕСКИ ОТМЕНЯЕТ
     """
     logger.info("Running rollover check for SCHEDULED_TODAY payments...")
+
+    today = date.today()
 
     async with get_session() as session:
         # Получаем все запросы со статусом SCHEDULED_TODAY
@@ -174,52 +177,104 @@ async def rollover_scheduled_today(bot: Bot):
 
         for payment_request in requests:
             try:
-                # Уведомляем Worker о том что оплата не прошла
-                if payment_request.created_by.telegram_id:
-                    worker_text = (
-                        f"⚠️ <b>Запрос на оплату #{payment_request.id} не был оплачен вчера</b>\n\n"
-                        f"<b>Название:</b> {payment_request.title}\n"
-                        f"<b>Сумма:</b> {payment_request.amount} ₽\n"
-                        f"<b>Взял в работу:</b> {payment_request.processing_by.display_name if payment_request.processing_by else 'Не указан'}\n\n"
-                        f"Запрос остается активным."
+                # Проверяем дату создания запроса
+                created_date = payment_request.created_at.date()
+
+                # Если запрос НЕ создан сегодня (прошло >= 1 день) - ОТМЕНЯЕМ
+                if created_date < today:
+                    logger.info(
+                        f"Auto-cancelling payment request #{payment_request.id} "
+                        f"(created {created_date}, not paid for 2+ days)"
                     )
 
-                    await bot.send_message(
-                        chat_id=payment_request.created_by.telegram_id,
-                        text=worker_text,
+                    # Отменяем запрос
+                    await PaymentRequestCRUD.cancel_payment_request(session, payment_request.id)
+
+                    # Уведомляем Worker об автоматической отмене
+                    if payment_request.created_by.telegram_id:
+                        worker_text = (
+                            f"❌ <b>Запрос на оплату #{payment_request.id} автоматически отменён</b>\n\n"
+                            f"<b>Название:</b> {payment_request.title}\n"
+                            f"<b>Сумма:</b> {payment_request.amount} ₽\n"
+                            f"<b>Взял в работу:</b> {payment_request.processing_by.display_name if payment_request.processing_by else 'Не указан'}\n\n"
+                            f"<b>Причина:</b> Запрос не был оплачен более 2 дней."
+                        )
+
+                        await bot.send_message(
+                            chat_id=payment_request.created_by.telegram_id,
+                            text=worker_text,
+                        )
+
+                    # Уведомляем billing контакт об автоматической отмене
+                    if payment_request.processing_by and payment_request.processing_by.telegram_id:
+                        billing_text = (
+                            f"❌ <b>Запрос на оплату #{payment_request.id} автоматически отменён</b>\n\n"
+                            f"<b>Название:</b> {payment_request.title}\n"
+                            f"<b>Сумма:</b> {payment_request.amount} ₽\n\n"
+                            f"<b>Причина:</b> Запрос не был оплачен более 2 дней."
+                        )
+
+                        await bot.send_message(
+                            chat_id=payment_request.processing_by.telegram_id,
+                            text=billing_text,
+                        )
+
+                    logger.info(f"Payment request #{payment_request.id} auto-cancelled")
+
+                else:
+                    # Запрос создан сегодня (первый день) - просто уведомляем
+                    logger.info(
+                        f"Sending reminder for payment request #{payment_request.id} "
+                        f"(created today, first day)"
                     )
 
-                # Уведомляем billing контакт
-                if payment_request.processing_by and payment_request.processing_by.telegram_id:
-                    message_text = format_payment_request_message(
-                        request_id=payment_request.id,
-                        title=payment_request.title,
-                        amount=payment_request.amount,
-                        comment=payment_request.comment,
-                        created_by_name=payment_request.created_by.display_name,
-                        status=payment_request.status,
-                        created_at=payment_request.created_at,
-                        processing_by_name=payment_request.processing_by.display_name,
-                    )
+                    # Уведомляем Worker
+                    if payment_request.created_by.telegram_id:
+                        worker_text = (
+                            f"⚠️ <b>Запрос на оплату #{payment_request.id} не был оплачен вчера</b>\n\n"
+                            f"<b>Название:</b> {payment_request.title}\n"
+                            f"<b>Сумма:</b> {payment_request.amount} ₽\n"
+                            f"<b>Взял в работу:</b> {payment_request.processing_by.display_name if payment_request.processing_by else 'Не указан'}\n\n"
+                            f"Запрос остается активным. Если не будет оплачен сегодня, он будет автоматически отменён завтра в 10:00."
+                        )
 
-                    billing_text = (
-                        f"⚠️ <b>Запрос на оплату #{payment_request.id} не был оплачен вчера</b>\n\n"
-                        f"{message_text}\n\n"
-                        f"Пожалуйста, обновите статус запроса."
-                    )
+                        await bot.send_message(
+                            chat_id=payment_request.created_by.telegram_id,
+                            text=worker_text,
+                        )
 
-                    keyboard = get_payment_request_keyboard(payment_request.id, payment_request.status)
+                    # Уведомляем billing контакт
+                    if payment_request.processing_by and payment_request.processing_by.telegram_id:
+                        message_text = format_payment_request_message(
+                            request_id=payment_request.id,
+                            title=payment_request.title,
+                            amount=payment_request.amount,
+                            comment=payment_request.comment,
+                            created_by_name=payment_request.created_by.display_name,
+                            status=payment_request.status,
+                            created_at=payment_request.created_at,
+                            processing_by_name=payment_request.processing_by.display_name,
+                        )
 
-                    await bot.send_message(
-                        chat_id=payment_request.processing_by.telegram_id,
-                        text=billing_text,
-                        reply_markup=keyboard,
-                    )
+                        billing_text = (
+                            f"⚠️ <b>Запрос на оплату #{payment_request.id} не был оплачен вчера</b>\n\n"
+                            f"{message_text}\n\n"
+                            f"Пожалуйста, оплатите сегодня или обновите статус. "
+                            f"Запрос будет автоматически отменён завтра в 10:00 если не будет оплачен."
+                        )
 
-                logger.info(f"Rollover notification sent for payment request #{payment_request.id}")
+                        keyboard = get_payment_request_keyboard(payment_request.id, payment_request.status)
+
+                        await bot.send_message(
+                            chat_id=payment_request.processing_by.telegram_id,
+                            text=billing_text,
+                            reply_markup=keyboard,
+                        )
+
+                    logger.info(f"Rollover reminder sent for payment request #{payment_request.id}")
 
             except Exception as e:
                 logger.error(
-                    f"Error sending rollover notification for payment request #{payment_request.id}: {e}",
+                    f"Error processing rollover for payment request #{payment_request.id}: {e}",
                     exc_info=True
                 )

@@ -58,16 +58,16 @@ def start_scheduler(bot: Bot):
     )
     logger.info("Scheduled reminder_scheduled_date at 10:00 MSK")
 
-    # Задача 3: Rollover в 00:01 МСК для неоплаченных SCHEDULED_TODAY
+    # Задача 3: Rollover в 10:00 МСК для неоплаченных SCHEDULED_TODAY
     scheduler.add_job(
         rollover_scheduled_today,
-        trigger=CronTrigger(hour=0, minute=1, timezone=MSK),
+        trigger=CronTrigger(hour=10, minute=0, timezone=MSK),
         args=[bot],
         id='rollover_scheduled_today',
-        name='Rollover SCHEDULED_TODAY payments at 00:01 MSK',
+        name='Rollover SCHEDULED_TODAY payments at 10:00 MSK',
         replace_existing=True,
     )
-    logger.info("Scheduled rollover_scheduled_today at 00:01 MSK")
+    logger.info("Scheduled rollover_scheduled_today at 10:00 MSK")
 
     # Запускаем scheduler
     scheduler.start()
