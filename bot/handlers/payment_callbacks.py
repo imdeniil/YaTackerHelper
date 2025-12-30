@@ -1,6 +1,7 @@
 """Обработчики callback для платежей (inline кнопки для billing контактов)"""
 
 import logging
+import asyncio
 from datetime import date, datetime
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
@@ -10,6 +11,16 @@ from aiogram.fsm.state import State, StatesGroup
 from bot.database import get_session, PaymentRequestCRUD, UserCRUD, PaymentRequestStatus
 
 logger = logging.getLogger(__name__)
+
+
+# Helper для автоудаления сообщений
+async def delete_message_after(message: Message, seconds: int):
+    """Удаляет сообщение через указанное количество секунд"""
+    await asyncio.sleep(seconds)
+    try:
+        await message.delete()
+    except Exception:
+        pass  # Игнорируем ошибки (сообщение может быть уже удалено)
 
 # Router для callback handlers
 payment_callbacks_router = Router()
@@ -153,13 +164,14 @@ async def on_payment_paid(callback: CallbackQuery, state: FSMContext):
 
     # Сохраняем request_id в FSM state
     await state.set_state(UploadProof.waiting_for_document)
-    await state.update_data(request_id=request_id)
 
-    await callback.message.answer(
+    # Отправляем временное сообщение и сохраняем его ID для удаления
+    temp_msg = await callback.message.answer(
         "📎 <b>Загрузка подтверждения оплаты</b>\n\n"
         "Пожалуйста, отправьте документ с платежкой (скриншот или PDF).\n\n"
         "Для отмены отправьте /cancel"
     )
+    await state.update_data(request_id=request_id, temp_message_id=temp_msg.message_id)
     await callback.answer()
 
 
@@ -168,6 +180,14 @@ async def on_proof_document(message: Message, state: FSMContext):
     """Обработчик загрузки документа платежки"""
     data = await state.get_data()
     request_id = data.get("request_id")
+    temp_message_id = data.get("temp_message_id")
+
+    # Удаляем временное сообщение "Загрузите платежку"
+    if temp_message_id:
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=temp_message_id)
+        except Exception:
+            pass
 
     if not request_id:
         await message.answer("❌ Ошибка: ID запроса не найден")
@@ -224,30 +244,44 @@ async def on_proof_document(message: Message, state: FSMContext):
             except Exception as e:
                 logger.error(f"Error updating billing message: {e}")
 
-        # Уведомляем Worker об оплате
+        # Обновляем сообщение Worker и отправляем платежку отдельно
         if payment_request.worker_message_id and payment_request.created_by.telegram_id:
             try:
-                worker_text = (
-                    f"✅ <b>Запрос на оплату #{payment_request.id} оплачен!</b>\n\n"
-                    f"<b>Название:</b> {payment_request.title}\n"
-                    f"<b>Сумма:</b> {payment_request.amount} ₽\n"
-                    f"<b>Оплатил:</b> {user.display_name}\n"
-                    f"<b>Дата оплаты:</b> {payment_request.paid_at.strftime('%d.%m.%Y %H:%M')}\n"
+                # Обновляем основное сообщение Worker
+                worker_text = format_payment_request_message(
+                    request_id=payment_request.id,
+                    title=payment_request.title,
+                    amount=payment_request.amount,
+                    comment=payment_request.comment,
+                    created_by_name=payment_request.created_by.display_name,
+                    status=payment_request.status,
+                    created_at=payment_request.created_at,
+                    paid_by_name=user.display_name,
+                    paid_at=payment_request.paid_at,
+                )
+                worker_text += "\n\n📎 Платежка отправлена отдельным сообщением ⬇️"
+
+                await message.bot.edit_message_text(
+                    chat_id=payment_request.created_by.telegram_id,
+                    message_id=payment_request.worker_message_id,
+                    text=worker_text,
                 )
 
-                # Отправляем Worker платежку
+                # Отправляем платежку отдельным документом
                 await message.bot.send_document(
                     chat_id=payment_request.created_by.telegram_id,
                     document=payment_proof_file_id,
-                    caption=worker_text,
+                    caption=f"📎 Платежка к запросу #{payment_request.id}",
                 )
             except Exception as e:
                 logger.error(f"Error notifying worker: {e}")
 
-        await message.answer(
+        # Отправляем временное подтверждение (будет автоудалено через 5 секунд)
+        confirm_msg = await message.answer(
             f"✅ Запрос #{request_id} отмечен как оплаченный!\n"
             f"Worker получит уведомление и платежку."
         )
+        asyncio.create_task(delete_message_after(confirm_msg, 5))
 
     await state.clear()
 
@@ -299,6 +333,12 @@ async def on_payment_schedule_today(callback: CallbackQuery):
     """Обработчик 'Оплачу сегодня'"""
     request_id = int(callback.data.split(":")[1])
 
+    # Удаляем сообщение с выбором даты
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+
     async with get_session() as session:
         # Получаем пользователя
         user = await UserCRUD.get_user_by_telegram_id(session, callback.from_user.id)
@@ -342,28 +382,32 @@ async def on_payment_schedule_today(callback: CallbackQuery):
             except Exception as e:
                 logger.error(f"Error updating billing message: {e}")
 
-        # Уведомляем Worker
-        if payment_request.created_by.telegram_id:
+        # Обновляем сообщение Worker (вместо создания нового)
+        if payment_request.worker_message_id and payment_request.created_by.telegram_id:
             try:
-                await callback.bot.send_message(
+                worker_text = format_payment_request_message(
+                    request_id=payment_request.id,
+                    title=payment_request.title,
+                    amount=payment_request.amount,
+                    comment=payment_request.comment,
+                    created_by_name=payment_request.created_by.display_name,
+                    status=payment_request.status,
+                    created_at=payment_request.created_at,
+                    processing_by_name=user.display_name,
+                )
+
+                await callback.bot.edit_message_text(
                     chat_id=payment_request.created_by.telegram_id,
-                    text=(
-                        f"📅 <b>Запрос на оплату #{payment_request.id} взят в работу</b>\n\n"
-                        f"<b>Название:</b> {payment_request.title}\n"
-                        f"<b>Сумма:</b> {payment_request.amount} ₽\n"
-                        f"<b>Взял в работу:</b> {user.display_name}\n"
-                        f"<b>Оплачу:</b> Сегодня"
-                    ),
+                    message_id=payment_request.worker_message_id,
+                    text=worker_text,
                 )
             except Exception as e:
-                logger.error(f"Error notifying worker: {e}")
+                logger.error(f"Error updating worker message: {e}")
 
-        await callback.message.answer(
-            f"✅ Запрос #{request_id} запланирован на сегодня!\n"
-            f"Вы получите напоминание в 18:00 МСК."
-        )
-
-    await callback.answer()
+    await callback.answer(
+        f"✅ Запрос #{request_id} запланирован на сегодня!\nВы получите напоминание в 18:00 МСК.",
+        show_alert=True
+    )
 
 
 @payment_callbacks_router.callback_query(F.data.startswith("pay_date:"))
@@ -371,15 +415,25 @@ async def on_payment_schedule_date(callback: CallbackQuery, state: FSMContext):
     """Обработчик 'Выбрать дату' - запрашивает ввод даты"""
     request_id = int(callback.data.split(":")[1])
 
-    await state.set_state(SelectDate.waiting_for_date)
-    await state.update_data(request_id=request_id)
+    # Удаляем сообщение с выбором даты
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
 
-    await callback.message.answer(
-        "📆 <b>Выбор даты оплаты</b>\n\n"
-        "Введите дату в формате <code>ДД.ММ.ГГГГ</code>\n"
-        "Например: <code>25.12.2025</code>\n\n"
-        "Для отмены отправьте /cancel"
+    await state.set_state(SelectDate.waiting_for_date)
+
+    # Отправляем временное сообщение с инструкцией и сохраняем его ID
+    temp_msg = await callback.bot.send_message(
+        chat_id=callback.message.chat.id,
+        text=(
+            "📆 <b>Выбор даты оплаты</b>\n\n"
+            "Введите дату в формате <code>ДД.ММ.ГГГГ</code>\n"
+            "Например: <code>25.12.2025</code>\n\n"
+            "Для отмены отправьте /cancel"
+        )
     )
+    await state.update_data(request_id=request_id, temp_message_id=temp_msg.message_id)
     await callback.answer()
 
 
@@ -388,6 +442,14 @@ async def on_date_input(message: Message, state: FSMContext):
     """Обработчик ввода даты"""
     data = await state.get_data()
     request_id = data.get("request_id")
+    temp_message_id = data.get("temp_message_id")
+
+    # Удаляем временное сообщение с запросом даты
+    if temp_message_id:
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=temp_message_id)
+        except Exception:
+            pass
 
     if not request_id:
         await message.answer("❌ Ошибка: ID запроса не найден")
@@ -458,26 +520,35 @@ async def on_date_input(message: Message, state: FSMContext):
             except Exception as e:
                 logger.error(f"Error updating billing message: {e}")
 
-        # Уведомляем Worker
-        if payment_request.created_by.telegram_id:
+        # Обновляем сообщение Worker (вместо создания нового)
+        if payment_request.worker_message_id and payment_request.created_by.telegram_id:
             try:
-                await message.bot.send_message(
+                worker_text = format_payment_request_message(
+                    request_id=payment_request.id,
+                    title=payment_request.title,
+                    amount=payment_request.amount,
+                    comment=payment_request.comment,
+                    created_by_name=payment_request.created_by.display_name,
+                    status=payment_request.status,
+                    created_at=payment_request.created_at,
+                    processing_by_name=user.display_name,
+                    scheduled_date=scheduled_date,
+                )
+
+                await message.bot.edit_message_text(
                     chat_id=payment_request.created_by.telegram_id,
-                    text=(
-                        f"📅 <b>Запрос на оплату #{payment_request.id} взят в работу</b>\n\n"
-                        f"<b>Название:</b> {payment_request.title}\n"
-                        f"<b>Сумма:</b> {payment_request.amount} ₽\n"
-                        f"<b>Взял в работу:</b> {user.display_name}\n"
-                        f"<b>Запланировано на:</b> {scheduled_date.strftime('%d.%m.%Y')}"
-                    ),
+                    message_id=payment_request.worker_message_id,
+                    text=worker_text,
                 )
             except Exception as e:
-                logger.error(f"Error notifying worker: {e}")
+                logger.error(f"Error updating worker message: {e}")
 
-        await message.answer(
+        # Отправляем временное подтверждение (будет автоудалено через 5 секунд)
+        confirm_msg = await message.answer(
             f"✅ Запрос #{request_id} запланирован на {scheduled_date.strftime('%d.%m.%Y')}!\n"
             f"Вы получите напоминание в 10:00 МСК в день оплаты."
         )
+        asyncio.create_task(delete_message_after(confirm_msg, 5))
 
     await state.clear()
 
@@ -516,19 +587,26 @@ async def on_payment_cancel(callback: CallbackQuery):
             except Exception as e:
                 logger.error(f"Error updating billing message: {e}")
 
-        # Уведомляем Worker
-        if payment_request.created_by.telegram_id:
+        # Обновляем сообщение Worker (вместо создания нового)
+        if payment_request.worker_message_id and payment_request.created_by.telegram_id:
             try:
-                await callback.bot.send_message(
+                worker_text = format_payment_request_message(
+                    request_id=payment_request.id,
+                    title=payment_request.title,
+                    amount=payment_request.amount,
+                    comment=payment_request.comment,
+                    created_by_name=payment_request.created_by.display_name,
+                    status=payment_request.status,
+                    created_at=payment_request.created_at,
+                )
+
+                await callback.bot.edit_message_text(
                     chat_id=payment_request.created_by.telegram_id,
-                    text=(
-                        f"❌ <b>Запрос на оплату #{payment_request.id} отменен</b>\n\n"
-                        f"<b>Название:</b> {payment_request.title}\n"
-                        f"<b>Сумма:</b> {payment_request.amount} ₽"
-                    ),
+                    message_id=payment_request.worker_message_id,
+                    text=worker_text,
                 )
             except Exception as e:
-                logger.error(f"Error notifying worker: {e}")
+                logger.error(f"Error updating worker message: {e}")
 
     await callback.answer("✅ Запрос отменен", show_alert=True)
 

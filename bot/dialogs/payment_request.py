@@ -260,21 +260,26 @@ async def on_send_request(callback: CallbackQuery, button: Button, manager: Dial
                     except Exception as e:
                         logger.error(f"Error sending notification to {billing_contact.telegram_username}: {e}")
 
-            # Отправляем подтверждение Worker
-            confirmation_text = (
-                f"✅ <b>Запрос на оплату #{payment_request.id} создан!</b>\n\n"
-                f"<b>Название:</b> {title}\n"
-                f"<b>Сумма:</b> {amount} ₽\n\n"
-                f"Billing контакты ({len(billing_contacts)}) получили уведомление.\n"
-                f"Вы получите уведомление о статусе оплаты."
+            # Отправляем Worker полноценное сообщение со статусом (для дальнейшего обновления)
+            worker_text = format_payment_request_message(
+                request_id=payment_request.id,
+                title=payment_request.title,
+                amount=payment_request.amount,
+                comment=payment_request.comment,
+                created_by_name=user.display_name,
+                status=payment_request.status,
+                created_at=payment_request.created_at,
             )
 
-            # Отправляем подтверждение Worker и сохраняем message_id
+            # Добавляем информацию о billing контактах
+            worker_text += f"\n\n📤 Уведомление отправлено billing контактам ({len(billing_contacts)})"
+
+            # Отправляем Worker и сохраняем message_id для будущих обновлений
             if user.telegram_id:
                 try:
                     worker_message = await callback.bot.send_message(
                         chat_id=user.telegram_id,
-                        text=confirmation_text,
+                        text=worker_text,
                     )
 
                     await PaymentRequestCRUD.set_worker_message_id(
