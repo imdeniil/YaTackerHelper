@@ -6,7 +6,7 @@ from aiogram_dialog import Dialog, Window, DialogManager
 from aiogram_dialog.widgets.kbd import Button, Column
 from aiogram_dialog.widgets.text import Const, Format
 
-from bot.states import MainMenu, CloneProject, ProjectInfo, UserManagement, UserSettings
+from bot.states import MainMenu, CloneProject, ProjectInfo, UserManagement, UserSettings, PaymentRequestCreation, MyPaymentRequests, AllPaymentRequests
 from bot.database import UserRole
 
 
@@ -52,6 +52,27 @@ async def on_user_settings(
     await manager.start(UserSettings.main)
 
 
+async def on_payment_request(
+    callback: CallbackQuery, button: Button, manager: DialogManager
+):
+    """Обработчик нажатия на кнопку "Запросить оплату"."""
+    await manager.start(PaymentRequestCreation.enter_title)
+
+
+async def on_my_payment_requests(
+    callback: CallbackQuery, button: Button, manager: DialogManager
+):
+    """Обработчик нажатия на кнопку "Мои запросы на оплату"."""
+    await manager.start(MyPaymentRequests.list)
+
+
+async def on_all_payment_requests(
+    callback: CallbackQuery, button: Button, manager: DialogManager
+):
+    """Обработчик нажатия на кнопку "Все запросы на оплату"."""
+    await manager.start(AllPaymentRequests.list)
+
+
 async def get_main_menu_data(dialog_manager: DialogManager, **kwargs) -> dict[str, Any]:
     """Получает данные для главного меню"""
     user = kwargs.get("user")
@@ -59,6 +80,8 @@ async def get_main_menu_data(dialog_manager: DialogManager, **kwargs) -> dict[st
     return {
         "is_owner": user.role == UserRole.OWNER if user else False,
         "is_manager_or_owner": user.role in [UserRole.OWNER, UserRole.MANAGER] if user else False,
+        "is_billing_contact": user.is_billing_contact if user else False,
+        "has_tracker_access": user.tracker_login is not None if user else False,
         "display_name": user.display_name if user else "Гость",
     }
 
@@ -73,7 +96,31 @@ main_menu_dialog = Dialog(
                 Const("📋 Клонировать проект"),
                 id="clone_project",
                 on_click=on_clone_project,
-                when=lambda data, widget, manager: data.get("is_manager_or_owner", False),
+                when=lambda data, widget, manager: data.get("is_manager_or_owner", False) and data.get("has_tracker_access", False),
+            ),
+            Button(
+                Const("ℹ️ Информация о проекте"),
+                id="project_info",
+                on_click=on_project_info,
+                when=lambda data, widget, manager: data.get("has_tracker_access", False),
+            ),
+            Button(
+                Const("💰 Запросить оплату"),
+                id="payment_request",
+                on_click=on_payment_request,
+                when=lambda data, widget, manager: not data.get("is_billing_contact", False),
+            ),
+            Button(
+                Const("📝 Мои запросы на оплату"),
+                id="my_payment_requests",
+                on_click=on_my_payment_requests,
+                when=lambda data, widget, manager: not data.get("is_billing_contact", False),
+            ),
+            Button(
+                Const("📊 Все запросы на оплату"),
+                id="all_payment_requests",
+                on_click=on_all_payment_requests,
+                when=lambda data, widget, manager: data.get("is_billing_contact", False),
             ),
             Button(
                 Const("👥 Управление пользователями"),

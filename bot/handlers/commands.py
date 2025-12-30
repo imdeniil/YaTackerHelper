@@ -3,6 +3,7 @@
 from aiogram import Router, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message, CallbackQuery
+from aiogram.fsm.context import FSMContext
 from aiogram_dialog import DialogManager, StartMode
 
 from bot.states import MainMenu
@@ -67,16 +68,30 @@ async def cmd_help(message: Message):
 
 
 @router.message(Command("cancel"))
-async def cmd_cancel(message: Message, dialog_manager: DialogManager):
+async def cmd_cancel(message: Message, dialog_manager: DialogManager, state: FSMContext):
     """
     Обработчик команды /cancel.
 
     Args:
         message: Сообщение от пользователя
         dialog_manager: Менеджер диалогов
+        state: FSM контекст
     """
-    if dialog_manager.has_context():
-        await dialog_manager.done()
+    # Проверяем есть ли активный FSM state (для payment callbacks)
+    current_state = await state.get_state()
+
+    # Проверяем есть ли активный диалог
+    has_dialog = dialog_manager.has_context()
+
+    if current_state or has_dialog:
+        # Очищаем FSM state если есть
+        if current_state:
+            await state.clear()
+
+        # Закрываем диалог если есть
+        if has_dialog:
+            await dialog_manager.done()
+
         await message.answer("❌ Текущая операция отменена")
     else:
         await message.answer("ℹ️ Нет активных операций")

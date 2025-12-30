@@ -11,18 +11,22 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram_dialog import setup_dialogs
 
 from bot.config import BotConfig
-from bot.handlers import commands_router
+from bot.handlers import commands_router, payment_callbacks_router
 from bot.dialogs import (
     main_menu_dialog,
     clone_project_dialog,
     project_info_dialog,
     user_management_dialog,
     user_settings_dialog,
+    payment_request_creation_dialog,
+    my_payment_requests_dialog,
+    all_payment_requests_dialog,
 )
 from bot.middlewares import AuthMiddleware, MessageCleanupMiddleware
 from bot.database import init_db, init_default_owners
 from bot.database.database import engine
 from bot.database.models import Base
+from bot.services import start_scheduler, shutdown_scheduler
 
 # Настройка логирования
 logging.basicConfig(
@@ -123,6 +127,7 @@ async def main(reset_database: bool = False, confirm_reset: bool = False, contin
 
     # Регистрация роутеров
     dp.include_router(commands_router)
+    dp.include_router(payment_callbacks_router)
 
     # Регистрация диалогов
     dp.include_router(main_menu_dialog)
@@ -130,6 +135,9 @@ async def main(reset_database: bool = False, confirm_reset: bool = False, contin
     dp.include_router(project_info_dialog)
     dp.include_router(user_management_dialog)
     dp.include_router(user_settings_dialog)
+    dp.include_router(payment_request_creation_dialog)
+    dp.include_router(my_payment_requests_dialog)
+    dp.include_router(all_payment_requests_dialog)
 
     # Настройка aiogram-dialog
     setup_dialogs(dp)
@@ -139,12 +147,17 @@ async def main(reset_database: bool = False, confirm_reset: bool = False, contin
     # Удаление вебхуков (если были)
     await bot.delete_webhook(drop_pending_updates=True)
 
+    # Запуск scheduler для напоминаний
+    start_scheduler(bot)
+
     logger.info("🚀 Бот запущен и готов к работе!")
 
     # Запуск polling
     try:
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
+        # Останавливаем scheduler
+        shutdown_scheduler()
         await bot.session.close()
         logger.info("👋 Бот остановлен")
 

@@ -27,7 +27,16 @@
       "Bash(del:*)",
       "Bash(uv lock:*)",
       "Bash(copy:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nInitial release v0.6.0 - Telegram bot for Yandex Tracker project cloning\n\nMajor features:\n- Full project cloning with all entities (tasks, subtasks, checklists, links, comments)\n- Dynamic dialog windows with Progress widget (aiogram-dialog)\n- Role-based access control (Owner, Manager, Worker)\n- PostgreSQL database with SQLAlchemy ORM\n- Docker containerization support\n- Real-time progress updates with BgManager\n\nArchitecture improvements:\n- Dynamic window approach (Approach 9) for seamless UI updates\n- Clean code: removed 259 lines of unused code from clone_project.py\n- Vertical button layout across all dialogs\n- Comprehensive documentation in docs/\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(gh repo create:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(if not exist \"migrations\" mkdir migrations)",
+      "Bash(cmd /c \"if not exist migrations mkdir migrations\")",
+      "Bash(alembic revision:*)",
+      "Bash(alembic upgrade:*)",
+      "Bash(alembic current:*)"
     ],
     "deny": [],
     "ask": []

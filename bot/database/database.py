@@ -46,17 +46,17 @@ async def init_default_owners():
 
     # Проверяем переменные окружения для владельцев
     owner1_username = os.getenv("OWNER1_USERNAME")
-    owner1_tracker_login = os.getenv("OWNER1_TRACKER_LOGIN")
+    owner1_tracker_login = os.getenv("OWNER1_TRACKER_LOGIN")  # Опциональный
     owner1_display_name = os.getenv("OWNER1_DISPLAY_NAME")
 
     owner2_username = os.getenv("OWNER2_USERNAME")
-    owner2_tracker_login = os.getenv("OWNER2_TRACKER_LOGIN")
+    owner2_tracker_login = os.getenv("OWNER2_TRACKER_LOGIN")  # Опциональный
     owner2_display_name = os.getenv("OWNER2_DISPLAY_NAME")
 
-    # Если не указаны данные владельцев - пропускаем
-    if not all([owner1_username, owner1_tracker_login, owner1_display_name]):
+    # Если не указаны обязательные данные владельца - пропускаем
+    if not all([owner1_username, owner1_display_name]):
         logger.warning(
-            "⚠️  Данные OWNER1 не указаны в .env - владелец не будет создан автоматически"
+            "⚠️  Обязательные данные OWNER1 (USERNAME, DISPLAY_NAME) не указаны в .env - владелец не будет создан автоматически"
         )
         return
 
@@ -67,29 +67,31 @@ async def init_default_owners():
             await UserCRUD.create_user(
                 session=session,
                 telegram_username=owner1_username,
-                tracker_login=owner1_tracker_login,
                 display_name=owner1_display_name,
                 role=UserRole.OWNER,
+                tracker_login=owner1_tracker_login if owner1_tracker_login else None,
             )
+            tracker_info = f" (Tracker: {owner1_tracker_login})" if owner1_tracker_login else " (без Tracker)"
             logger.info(
-                f"✅ Создан владелец 1: @{owner1_username} ({owner1_display_name})"
+                f"✅ Создан владелец 1: @{owner1_username} ({owner1_display_name}){tracker_info}"
             )
         else:
             logger.info(f"ℹ️  Владелец 1: @{owner1_username} уже существует")
 
         # Создаем Owner 2 (если указан)
-        if all([owner2_username, owner2_tracker_login, owner2_display_name]):
+        if all([owner2_username, owner2_display_name]):
             owner2 = await UserCRUD.get_user_by_username(session, owner2_username)
             if not owner2:
                 await UserCRUD.create_user(
                     session=session,
                     telegram_username=owner2_username,
-                    tracker_login=owner2_tracker_login,
                     display_name=owner2_display_name,
                     role=UserRole.OWNER,
+                    tracker_login=owner2_tracker_login if owner2_tracker_login else None,
                 )
+                tracker_info = f" (Tracker: {owner2_tracker_login})" if owner2_tracker_login else " (без Tracker)"
                 logger.info(
-                    f"✅ Создан владелец 2: @{owner2_username} ({owner2_display_name})"
+                    f"✅ Создан владелец 2: @{owner2_username} ({owner2_display_name}){tracker_info}"
                 )
             else:
                 logger.info(f"ℹ️  Владелец 2: @{owner2_username} уже существует")

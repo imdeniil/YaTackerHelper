@@ -13,6 +13,7 @@ Bash: cmd/powershell
 5. SQLAclhemy
 6. Alembic
 7. Pydantic
+8. fasthtml
 
 Для работы с библиотекой YaTrackerApi используй локальный файл в папке docs/YaTrackerApi.md
 

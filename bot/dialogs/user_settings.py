@@ -18,7 +18,6 @@ from src.tracker_client import TrackerClient
 
 logger = logging.getLogger(__name__)
 
-
 # ============ Data Getters ============
 
 async def get_user_settings_data(dialog_manager: DialogManager, **kwargs) -> dict[str, Any]:

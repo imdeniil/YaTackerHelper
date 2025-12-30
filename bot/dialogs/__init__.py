@@ -5,6 +5,9 @@ from .clone_project import clone_project_dialog
 from .project_info import project_info_dialog
 from .user_management import user_management_dialog
 from .user_settings import user_settings_dialog
+from .payment_request import payment_request_creation_dialog
+from .my_payment_requests import my_payment_requests_dialog
+from .all_payment_requests import all_payment_requests_dialog
 
 __all__ = [
     "main_menu_dialog",
@@ -12,4 +15,7 @@ __all__ = [
     "project_info_dialog",
     "user_management_dialog",
     "user_settings_dialog",
+    "payment_request_creation_dialog",
+    "my_payment_requests_dialog",
+    "all_payment_requests_dialog",
 ]

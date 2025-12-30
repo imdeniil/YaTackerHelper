@@ -55,6 +55,8 @@ async def get_user_management_data(dialog_manager: DialogManager, **kwargs) -> d
             "role": u.role.value,
             "role_emoji": role_mapping.get(u.role.value, {}).get("emoji", "❓"),
             "role_display": role_mapping.get(u.role.value, {}).get("display", u.role.value),
+            "is_billing_contact": u.is_billing_contact,
+            "billing_emoji": "💳 " if u.is_billing_contact else "",
         }
         for u in users
     ]
@@ -76,6 +78,8 @@ async def get_user_management_data(dialog_manager: DialogManager, **kwargs) -> d
                     "display_name": u.display_name,
                     "role": u.role.value,
                     "role_display": role_mapping.get(u.role.value, {}).get("display", u.role.value),
+                    "is_billing_contact": u.is_billing_contact,
+                    "billing_status": "💳 Да" if u.is_billing_contact else "Нет",
                 }
                 break
 
@@ -109,6 +113,12 @@ async def get_user_management_data(dialog_manager: DialogManager, **kwargs) -> d
         {"id": "worker", "name": "👷 Работник"},
     ]
 
+    # Список опций для billing контакта
+    billing_contact_options = [
+        {"id": "yes", "name": "💳 Да, будет получать уведомления об оплате"},
+        {"id": "no", "name": "Нет"},
+    ]
+
     # Сохраняем tracker_users_map в dialog_data для использования в обработчиках
     if tracker_users_map:
         dialog_manager.dialog_data["tracker_users_map"] = tracker_users_map
@@ -124,6 +134,7 @@ async def get_user_management_data(dialog_manager: DialogManager, **kwargs) -> d
         "new_user_data": new_user_data,
         "tracker_users": tracker_users,
         "roles": roles_list,
+        "billing_contact_options": billing_contact_options,
         "error": dialog_manager.dialog_data.get("error"),
     }
 
@@ -214,6 +225,17 @@ async def handle_create_input(text: str, step: str, manager: DialogManager):
         else:
             manager.dialog_data["error"] = "❌ Username не может быть пустым"
 
+    elif step == "enter_display_name":
+        # Ввод ФИО вручную (если пропустили выбор Tracker)
+        display_name = text.strip()
+        if display_name:
+            new_user_data["display_name"] = display_name
+            new_user_data["tracker_login"] = None  # Явно устанавливаем None
+            manager.dialog_data["step"] = "role"
+            manager.dialog_data.pop("error", None)
+        else:
+            manager.dialog_data["error"] = "❌ ФИО не может быть пустым"
+
     manager.dialog_data["new_user_data"] = new_user_data
 
 
@@ -265,9 +287,10 @@ async def create_user_from_data(data: dict, manager: DialogManager) -> bool:
             await UserCRUD.create_user(
                 session=session,
                 telegram_username=data["username"],
-                tracker_login=data["tracker_login"],
                 display_name=data["display_name"],
                 role=role,
+                tracker_login=data.get("tracker_login"),  # Опциональный
+                is_billing_contact=data.get("is_billing_contact", False),
             )
         return True
     except IntegrityError as e:
@@ -307,10 +330,32 @@ async def on_tracker_user_selected(callback: CallbackQuery, widget: Select, mana
     await manager.update({})
 
 
+async def on_skip_tracker(callback: CallbackQuery, button: Button, manager: DialogManager):
+    """Обработчик пропуска выбора пользователя Tracker"""
+    # Пропускаем tracker_login, переходим к ручному вводу ФИО
+    manager.dialog_data["step"] = "enter_display_name"
+    manager.dialog_data.pop("error", None)
+    manager.show_mode = ShowMode.EDIT
+    await manager.update({})
+
+
 async def on_role_selected(callback: CallbackQuery, widget: Select, manager: DialogManager, item_id: str):
     """Обработка выбора роли"""
     new_user_data = manager.dialog_data.get("new_user_data", {})
     new_user_data["role"] = item_id
+    manager.dialog_data["new_user_data"] = new_user_data
+
+    # Переходим к выбору billing контакта
+    manager.dialog_data["step"] = "billing_contact"
+    manager.dialog_data.pop("error", None)
+    manager.show_mode = ShowMode.EDIT
+    await manager.update({})
+
+
+async def on_billing_contact_selected(callback: CallbackQuery, widget: Select, manager: DialogManager, item_id: str):
+    """Обработка выбора статуса billing контакта"""
+    new_user_data = manager.dialog_data.get("new_user_data", {})
+    new_user_data["is_billing_contact"] = item_id == "yes"
     manager.dialog_data["new_user_data"] = new_user_data
 
     # Создаем пользователя
@@ -383,6 +428,26 @@ async def on_back_from_edit_step(callback: CallbackQuery, button: Button, manage
     await manager.update({})
 
 
+async def on_toggle_billing_contact(callback: CallbackQuery, button: Button, manager: DialogManager):
+    """Переключение статуса billing контакта"""
+    user_id = manager.dialog_data.get("selected_user_id")
+    if not user_id:
+        await callback.answer("❌ Пользователь не выбран", show_alert=True)
+        return
+
+    async with get_session() as session:
+        user = await UserCRUD.toggle_billing_contact(session, int(user_id))
+
+    if user:
+        status = "включен" if user.is_billing_contact else "выключен"
+        await callback.answer(f"✅ Billing контакт {status}")
+    else:
+        await callback.answer("❌ Ошибка обновления")
+
+    manager.show_mode = ShowMode.EDIT
+    await manager.update({})
+
+
 # ============ Dialog Windows ============
 
 user_management_window = Window(
@@ -393,14 +458,15 @@ user_management_window = Window(
         "Роли:\n"
         "👑 Владелец\n"
         "📊 Менеджер\n"
-        "👷 Работник",
+        "👷 Работник\n\n"
+        "💳 - Billing контакт (получает уведомления об оплате)",
         when=lambda data, widget, manager: data["mode"] == "list",
     ),
 
     # Список пользователей (показываем только в режиме list)
     ScrollingGroup(
         Select(
-            Format("{item[role_emoji]} {item[display_name]}"),
+            Format("{item[billing_emoji]}{item[role_emoji]} {item[display_name]}"),
             id="user_select",
             item_id_getter=lambda x: x["id"],
             items="users",
@@ -429,7 +495,7 @@ user_management_window = Window(
     # Промпты для создания
     Format(
         "➕ <b>Создание пользователя</b>\n\n"
-        "Шаг 1/3: Введите Telegram username:\n"
+        "Шаг 1/4: Введите Telegram username:\n"
         "<i>Например: @example или example</i>",
         when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "username",
     ),
@@ -442,7 +508,7 @@ user_management_window = Window(
     # Выбор пользователя Tracker
     Format(
         "➕ <b>Создание пользователя</b>\n\n"
-        "Шаг 2/3: Выберите пользователя Yandex Tracker:\n"
+        "Шаг 2/4: Выберите пользователя Yandex Tracker:\n"
         "Telegram: @{new_user_data[username]}",
         when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "select_tracker_user",
     ),
@@ -461,11 +527,32 @@ user_management_window = Window(
         when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "select_tracker_user",
     ),
 
+    Button(
+        Const("⏭️ Пропустить (пользователь не работает с Tracker)"),
+        id="skip_tracker",
+        on_click=on_skip_tracker,
+        when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "select_tracker_user",
+    ),
+
+    # Ввод ФИО вручную (если пропустили Tracker)
     Format(
         "➕ <b>Создание пользователя</b>\n\n"
-        "Шаг 3/3: Выберите роль:\n\n"
+        "Шаг 2.5/4: Введите ФИО пользователя:\n"
+        "Telegram: @{new_user_data[username]}\n\n"
+        "<i>Например: Иван Иванов</i>",
+        when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "enter_display_name",
+    ),
+
+    Format(
+        "\n{error}",
+        when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "enter_display_name" and data.get("error"),
+    ),
+
+    Format(
+        "➕ <b>Создание пользователя</b>\n\n"
+        "Шаг 3/4: Выберите роль:\n\n"
         "Telegram: @{new_user_data[username]}\n"
-        "Tracker: {new_user_data[tracker_login]}",
+        "Tracker: {new_user_data.get('tracker_login', 'Не указан')}",
         when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "role",
     ),
 
@@ -483,6 +570,30 @@ user_management_window = Window(
         when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "role",
     ),
 
+    # Выбор billing контакта
+    Format(
+        "➕ <b>Создание пользователя</b>\n\n"
+        "Шаг 4/4: Будет ли пользователь получать уведомления об оплате счетов?\n\n"
+        "Telegram: @{new_user_data[username]}\n"
+        "Tracker: {new_user_data[tracker_login]}\n"
+        "Роль: {new_user_data[role]}",
+        when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "billing_contact",
+    ),
+
+    ScrollingGroup(
+        Select(
+            Format("{item[name]}"),
+            id="billing_contact_select",
+            item_id_getter=lambda x: x["id"],
+            items="billing_contact_options",
+            on_click=on_billing_contact_selected,
+        ),
+        id="billing_contact_scroll",
+        width=1,
+        height=2,
+        when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "billing_contact",
+    ),
+
     Button(
         Const("❌ Отмена"),
         id="cancel_create",
@@ -497,7 +608,8 @@ user_management_window = Window(
         "Telegram ID: {selected_user[telegram_id]}\n"
         "Username: {selected_user[username]}\n"
         "Tracker: {selected_user[tracker]}\n"
-        "Роль: {selected_user[role_display]}",
+        "Роль: {selected_user[role_display]}\n"
+        "Billing контакт: {selected_user[billing_status]}",
         when=lambda data, widget, manager: data["mode"] == "edit" and data["step"] == "",
     ),
 
@@ -518,6 +630,12 @@ user_management_window = Window(
         Const("Роль"),
         id="role",
         on_click=on_edit_field,
+        when=lambda data, widget, manager: data["mode"] == "edit" and data["step"] == "" and data["is_owner"],
+    ),
+    Button(
+        Format("💳 Billing контакт: {selected_user[billing_status]}"),
+        id="toggle_billing",
+        on_click=on_toggle_billing_contact,
         when=lambda data, widget, manager: data["mode"] == "edit" and data["step"] == "" and data["is_owner"],
     ),
 

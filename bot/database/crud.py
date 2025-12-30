@@ -1,9 +1,9 @@
 from typing import Optional, List
+from datetime import datetime, date
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from .models import User, UserSettings, UserRole
-
+from .models import User, UserSettings, UserRole, PaymentRequest, PaymentRequestStatus
 
 class UserCRUD:
     """CRUD операции для работы с пользователями"""
@@ -12,10 +12,11 @@ class UserCRUD:
     async def create_user(
         session: AsyncSession,
         telegram_username: str,
-        tracker_login: str,
         display_name: str,
         role: UserRole = UserRole.WORKER,
+        tracker_login: Optional[str] = None,
         telegram_id: Optional[int] = None,
+        is_billing_contact: bool = False,
         default_queue: str = "ZADACIBMT",
         default_portfolio: str = "65cde69d486b9524503455b7",
     ) -> User:
@@ -24,10 +25,11 @@ class UserCRUD:
         Args:
             session: Сессия БД
             telegram_username: Username в Telegram (обязательный)
-            tracker_login: Логин в Yandex Tracker
-            display_name: ФИО пользователя (из Tracker)
+            display_name: ФИО пользователя (обязательный)
             role: Роль пользователя
+            tracker_login: Логин в Yandex Tracker (опциональный, только для работы с Tracker)
             telegram_id: ID пользователя в Telegram (опциональный, заполнится при первом входе)
+            is_billing_contact: Флаг контактного лица для счетов (по умолчанию False)
             default_queue: Очередь по умолчанию
             default_portfolio: Портфель по умолчанию
 
@@ -40,6 +42,7 @@ class UserCRUD:
             tracker_login=tracker_login,
             display_name=display_name,
             role=role,
+            is_billing_contact=is_billing_contact,
         )
         session.add(user)
         await session.flush()
@@ -214,3 +217,328 @@ class UserCRUD:
         await session.delete(user)
         await session.commit()
         return True
+
+    @staticmethod
+    async def toggle_billing_contact(
+        session: AsyncSession,
+        user_id: int,
+    ) -> Optional[User]:
+        """Переключает статус billing контакта для пользователя
+
+        Args:
+            session: Сессия БД
+            user_id: ID пользователя
+
+        Returns:
+            Обновленный пользователь или None
+        """
+        user = await UserCRUD.get_user_by_id(session, user_id)
+        if not user:
+            return None
+
+        user.is_billing_contact = not user.is_billing_contact
+        await session.commit()
+        await session.refresh(user)
+        return user
+
+    @staticmethod
+    async def get_billing_contacts(session: AsyncSession) -> List[User]:
+        """Получает всех пользователей отмеченных как billing контакты
+
+        Args:
+            session: Сессия БД
+
+        Returns:
+            Список пользователей с is_billing_contact=True
+        """
+        query = (
+            select(User)
+            .options(selectinload(User.settings))
+            .where(User.is_billing_contact == True)
+        )
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+
+class PaymentRequestCRUD:
+    """CRUD операции для работы с запросами на оплату"""
+
+    @staticmethod
+    async def create_payment_request(
+        session: AsyncSession,
+        created_by_id: int,
+        title: str,
+        amount: str,
+        comment: str,
+        invoice_file_id: Optional[str] = None,
+    ) -> PaymentRequest:
+        """Создает новый запрос на оплату
+
+        Args:
+            session: Сессия БД
+            created_by_id: ID пользователя-создателя
+            title: Название для плательщика
+            amount: Сумма в рублях
+            comment: Комментарий
+            invoice_file_id: Telegram file_id счета (опционально)
+
+        Returns:
+            Созданный запрос на оплату
+        """
+        payment_request = PaymentRequest(
+            created_by_id=created_by_id,
+            title=title,
+            amount=amount,
+            comment=comment,
+            invoice_file_id=invoice_file_id,
+            status=PaymentRequestStatus.PENDING,
+        )
+        session.add(payment_request)
+        await session.commit()
+        await session.refresh(payment_request)
+        return payment_request
+
+    @staticmethod
+    async def get_payment_request_by_id(
+        session: AsyncSession,
+        request_id: int,
+    ) -> Optional[PaymentRequest]:
+        """Получает запрос на оплату по ID с загруженными связями
+
+        Args:
+            session: Сессия БД
+            request_id: ID запроса
+
+        Returns:
+            Запрос на оплату или None
+        """
+        query = (
+            select(PaymentRequest)
+            .options(
+                selectinload(PaymentRequest.created_by),
+                selectinload(PaymentRequest.processing_by),
+                selectinload(PaymentRequest.paid_by),
+            )
+            .where(PaymentRequest.id == request_id)
+        )
+        result = await session.execute(query)
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_user_payment_requests(
+        session: AsyncSession,
+        user_id: int,
+    ) -> List[PaymentRequest]:
+        """Получает все запросы на оплату созданные пользователем
+
+        Args:
+            session: Сессия БД
+            user_id: ID пользователя
+
+        Returns:
+            Список запросов пользователя
+        """
+        query = (
+            select(PaymentRequest)
+            .options(
+                selectinload(PaymentRequest.created_by),
+                selectinload(PaymentRequest.processing_by),
+                selectinload(PaymentRequest.paid_by),
+            )
+            .where(PaymentRequest.created_by_id == user_id)
+            .order_by(PaymentRequest.created_at.desc())
+        )
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def get_all_payment_requests(
+        session: AsyncSession,
+        status: Optional[PaymentRequestStatus] = None,
+    ) -> List[PaymentRequest]:
+        """Получает все запросы на оплату (для billing контактов)
+
+        Args:
+            session: Сессия БД
+            status: Фильтр по статусу (опционально)
+
+        Returns:
+            Список всех запросов
+        """
+        query = (
+            select(PaymentRequest)
+            .options(
+                selectinload(PaymentRequest.created_by),
+                selectinload(PaymentRequest.processing_by),
+                selectinload(PaymentRequest.paid_by),
+            )
+        )
+
+        if status:
+            query = query.where(PaymentRequest.status == status)
+
+        query = query.order_by(PaymentRequest.created_at.desc())
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def get_pending_requests(session: AsyncSession) -> List[PaymentRequest]:
+        """Получает все запросы со статусом PENDING
+
+        Args:
+            session: Сессия БД
+
+        Returns:
+            Список запросов в ожидании
+        """
+        return await PaymentRequestCRUD.get_all_payment_requests(session, PaymentRequestStatus.PENDING)
+
+    @staticmethod
+    async def update_payment_request(
+        session: AsyncSession,
+        request_id: int,
+        **kwargs,
+    ) -> Optional[PaymentRequest]:
+        """Обновляет данные запроса на оплату
+
+        Args:
+            session: Сессия БД
+            request_id: ID запроса
+            **kwargs: Поля для обновления
+
+        Returns:
+            Обновленный запрос или None
+        """
+        payment_request = await PaymentRequestCRUD.get_payment_request_by_id(session, request_id)
+        if not payment_request:
+            return None
+
+        for key, value in kwargs.items():
+            if hasattr(payment_request, key):
+                setattr(payment_request, key, value)
+
+        payment_request.updated_at = datetime.utcnow()
+        await session.commit()
+        await session.refresh(payment_request)
+        return payment_request
+
+    @staticmethod
+    async def cancel_payment_request(
+        session: AsyncSession,
+        request_id: int,
+    ) -> Optional[PaymentRequest]:
+        """Отменяет запрос на оплату
+
+        Args:
+            session: Сессия БД
+            request_id: ID запроса
+
+        Returns:
+            Обновленный запрос или None
+        """
+        return await PaymentRequestCRUD.update_payment_request(
+            session,
+            request_id,
+            status=PaymentRequestStatus.CANCELLED,
+        )
+
+    @staticmethod
+    async def mark_as_paid(
+        session: AsyncSession,
+        request_id: int,
+        paid_by_id: int,
+        payment_proof_file_id: str,
+    ) -> Optional[PaymentRequest]:
+        """Отмечает запрос как оплаченный
+
+        Args:
+            session: Сессия БД
+            request_id: ID запроса
+            paid_by_id: ID пользователя который оплатил
+            payment_proof_file_id: Telegram file_id платежки
+
+        Returns:
+            Обновленный запрос или None
+        """
+        return await PaymentRequestCRUD.update_payment_request(
+            session,
+            request_id,
+            status=PaymentRequestStatus.PAID,
+            paid_by_id=paid_by_id,
+            paid_at=datetime.utcnow(),
+            payment_proof_file_id=payment_proof_file_id,
+        )
+
+    @staticmethod
+    async def schedule_payment(
+        session: AsyncSession,
+        request_id: int,
+        processing_by_id: int,
+        scheduled_date: Optional[date] = None,
+        is_today: bool = False,
+    ) -> Optional[PaymentRequest]:
+        """Планирует оплату на дату
+
+        Args:
+            session: Сессия БД
+            request_id: ID запроса
+            processing_by_id: ID пользователя который взял в работу
+            scheduled_date: Запланированная дата (если не today)
+            is_today: Флаг "оплачу сегодня"
+
+        Returns:
+            Обновленный запрос или None
+        """
+        status = PaymentRequestStatus.SCHEDULED_TODAY if is_today else PaymentRequestStatus.SCHEDULED_DATE
+
+        return await PaymentRequestCRUD.update_payment_request(
+            session,
+            request_id,
+            status=status,
+            processing_by_id=processing_by_id,
+            scheduled_date=scheduled_date,
+        )
+
+    @staticmethod
+    async def set_worker_message_id(
+        session: AsyncSession,
+        request_id: int,
+        message_id: int,
+    ) -> Optional[PaymentRequest]:
+        """Сохраняет ID сообщения у Worker
+
+        Args:
+            session: Сессия БД
+            request_id: ID запроса
+            message_id: Telegram message ID
+
+        Returns:
+            Обновленный запрос или None
+        """
+        return await PaymentRequestCRUD.update_payment_request(
+            session,
+            request_id,
+            worker_message_id=message_id,
+        )
+
+    @staticmethod
+    async def set_billing_message_id(
+        session: AsyncSession,
+        request_id: int,
+        message_id: int,
+    ) -> Optional[PaymentRequest]:
+        """Сохраняет ID сообщения у billing контакта
+
+        Args:
+            session: Сессия БД
+            request_id: ID запроса
+            message_id: Telegram message ID
+
+        Returns:
+            Обновленный запрос или None
+        """
+        return await PaymentRequestCRUD.update_payment_request(
+            session,
+            request_id,
+            billing_message_id=message_id,
+        )
