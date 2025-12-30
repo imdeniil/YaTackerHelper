@@ -1,7 +1,6 @@
 """Обработчики callback для платежей (inline кнопки для billing контактов)"""
 
 import logging
-import asyncio
 from datetime import date, datetime
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
@@ -11,16 +10,6 @@ from aiogram.fsm.state import State, StatesGroup
 from bot.database import get_session, PaymentRequestCRUD, UserCRUD, PaymentRequestStatus
 
 logger = logging.getLogger(__name__)
-
-
-# Helper для автоудаления сообщений
-async def delete_message_after(message: Message, seconds: int):
-    """Удаляет сообщение через указанное количество секунд"""
-    await asyncio.sleep(seconds)
-    try:
-        await message.delete()
-    except Exception:
-        pass  # Игнорируем ошибки (сообщение может быть уже удалено)
 
 # Router для callback handlers
 payment_callbacks_router = Router()
@@ -164,14 +153,13 @@ async def on_payment_paid(callback: CallbackQuery, state: FSMContext):
 
     # Сохраняем request_id в FSM state
     await state.set_state(UploadProof.waiting_for_document)
+    await state.update_data(request_id=request_id)
 
-    # Отправляем временное сообщение и сохраняем его ID для удаления
-    temp_msg = await callback.message.answer(
+    await callback.message.answer(
         "📎 <b>Загрузка подтверждения оплаты</b>\n\n"
         "Пожалуйста, отправьте документ с платежкой (скриншот или PDF).\n\n"
         "Для отмены отправьте /cancel"
     )
-    await state.update_data(request_id=request_id, temp_message_id=temp_msg.message_id)
     await callback.answer()
 
 
@@ -180,14 +168,6 @@ async def on_proof_document(message: Message, state: FSMContext):
     """Обработчик загрузки документа платежки"""
     data = await state.get_data()
     request_id = data.get("request_id")
-    temp_message_id = data.get("temp_message_id")
-
-    # Удаляем временное сообщение "Загрузите платежку"
-    if temp_message_id:
-        try:
-            await message.bot.delete_message(chat_id=message.chat.id, message_id=temp_message_id)
-        except Exception:
-            pass
 
     if not request_id:
         await message.answer("❌ Ошибка: ID запроса не найден")
@@ -276,12 +256,10 @@ async def on_proof_document(message: Message, state: FSMContext):
             except Exception as e:
                 logger.error(f"Error notifying worker: {e}")
 
-        # Отправляем временное подтверждение (будет автоудалено через 5 секунд)
-        confirm_msg = await message.answer(
+        await message.answer(
             f"✅ Запрос #{request_id} отмечен как оплаченный!\n"
             f"Worker получит уведомление и платежку."
         )
-        asyncio.create_task(delete_message_after(confirm_msg, 5))
 
     await state.clear()
 
@@ -332,12 +310,6 @@ async def on_payment_schedule(callback: CallbackQuery, state: FSMContext):
 async def on_payment_schedule_today(callback: CallbackQuery):
     """Обработчик 'Оплачу сегодня'"""
     request_id = int(callback.data.split(":")[1])
-
-    # Удаляем сообщение с выбором даты
-    try:
-        await callback.message.delete()
-    except Exception:
-        pass
 
     async with get_session() as session:
         # Получаем пользователя
@@ -415,25 +387,15 @@ async def on_payment_schedule_date(callback: CallbackQuery, state: FSMContext):
     """Обработчик 'Выбрать дату' - запрашивает ввод даты"""
     request_id = int(callback.data.split(":")[1])
 
-    # Удаляем сообщение с выбором даты
-    try:
-        await callback.message.delete()
-    except Exception:
-        pass
-
     await state.set_state(SelectDate.waiting_for_date)
+    await state.update_data(request_id=request_id)
 
-    # Отправляем временное сообщение с инструкцией и сохраняем его ID
-    temp_msg = await callback.bot.send_message(
-        chat_id=callback.message.chat.id,
-        text=(
-            "📆 <b>Выбор даты оплаты</b>\n\n"
-            "Введите дату в формате <code>ДД.ММ.ГГГГ</code>\n"
-            "Например: <code>25.12.2025</code>\n\n"
-            "Для отмены отправьте /cancel"
-        )
+    await callback.message.answer(
+        "📆 <b>Выбор даты оплаты</b>\n\n"
+        "Введите дату в формате <code>ДД.ММ.ГГГГ</code>\n"
+        "Например: <code>25.12.2025</code>\n\n"
+        "Для отмены отправьте /cancel"
     )
-    await state.update_data(request_id=request_id, temp_message_id=temp_msg.message_id)
     await callback.answer()
 
 
@@ -442,14 +404,6 @@ async def on_date_input(message: Message, state: FSMContext):
     """Обработчик ввода даты"""
     data = await state.get_data()
     request_id = data.get("request_id")
-    temp_message_id = data.get("temp_message_id")
-
-    # Удаляем временное сообщение с запросом даты
-    if temp_message_id:
-        try:
-            await message.bot.delete_message(chat_id=message.chat.id, message_id=temp_message_id)
-        except Exception:
-            pass
 
     if not request_id:
         await message.answer("❌ Ошибка: ID запроса не найден")
@@ -543,12 +497,10 @@ async def on_date_input(message: Message, state: FSMContext):
             except Exception as e:
                 logger.error(f"Error updating worker message: {e}")
 
-        # Отправляем временное подтверждение (будет автоудалено через 5 секунд)
-        confirm_msg = await message.answer(
+        await message.answer(
             f"✅ Запрос #{request_id} запланирован на {scheduled_date.strftime('%d.%m.%Y')}!\n"
             f"Вы получите напоминание в 10:00 МСК в день оплаты."
         )
-        asyncio.create_task(delete_message_after(confirm_msg, 5))
 
     await state.clear()
 

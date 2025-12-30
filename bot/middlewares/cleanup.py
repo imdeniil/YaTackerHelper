@@ -7,7 +7,7 @@ from aiogram.types import Message, TelegramObject
 class MessageCleanupMiddleware(BaseMiddleware):
     """Middleware для удаления сообщений пользователя в диалогах
 
-    Автоматически удаляет текстовые сообщения пользователя после их обработки.
+    Автоматически удаляет все сообщения пользователя (текст, документы, фото) после их обработки.
     Это позволяет реализовать single window интерфейс без ручного удаления.
     """
 
@@ -20,8 +20,8 @@ class MessageCleanupMiddleware(BaseMiddleware):
         # Выполняем основную обработку
         result = await handler(event, data)
 
-        # Удаляем сообщение пользователя после обработки
-        if isinstance(event, Message) and event.text and not event.from_user.is_bot:
+        # Удаляем сообщение пользователя после обработки (текст, документы, фото и т.д.)
+        if isinstance(event, Message) and not event.from_user.is_bot:
             try:
                 await event.delete()
             except Exception:
