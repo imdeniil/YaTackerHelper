@@ -152,9 +152,17 @@ async def on_amount_input(message: Message, widget: MessageInput, manager: Dialo
         await manager.switch_to(PaymentRequestCreation.enter_amount)
         return
 
-    # Успешная валидация - очищаем ошибку и переходим дальше
+    # Форматируем сумму для красивого отображения
+    if amount_float == int(amount_float):
+        # Целое число - без копеек, с пробелами для тысяч
+        formatted_amount = f"{int(amount_float):,}".replace(",", " ")
+    else:
+        # Есть копейки - с двумя знаками после точки, с пробелами для тысяч
+        formatted_amount = f"{amount_float:,.2f}".replace(",", " ")
+
+    # Успешная валидация - очищаем ошибку и сохраняем отформатированную сумму
     manager.dialog_data.pop("error", None)
-    manager.dialog_data["amount"] = amount
+    manager.dialog_data["amount"] = formatted_amount
     manager.show_mode = ShowMode.EDIT
     await manager.switch_to(PaymentRequestCreation.enter_comment)
 
