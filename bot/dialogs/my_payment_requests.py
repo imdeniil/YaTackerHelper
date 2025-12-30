@@ -237,6 +237,27 @@ async def on_cancel_request(callback: CallbackQuery, button: Button, manager: Di
             except Exception as e:
                 logger.error(f"Error updating billing notification {notification.id}: {e}")
 
+        # Обновляем сообщение Worker (если есть worker_message_id из success окна)
+        if payment_request.worker_message_id and payment_request.created_by.telegram_id:
+            try:
+                worker_text = format_payment_request_message(
+                    request_id=payment_request.id,
+                    title=payment_request.title,
+                    amount=payment_request.amount,
+                    comment=payment_request.comment,
+                    created_by_name=payment_request.created_by.display_name,
+                    status=payment_request.status,
+                    created_at=payment_request.created_at,
+                )
+
+                await callback.bot.edit_message_text(
+                    chat_id=payment_request.created_by.telegram_id,
+                    message_id=payment_request.worker_message_id,
+                    text=worker_text,
+                )
+            except Exception as e:
+                logger.error(f"Error updating worker message: {e}")
+
     await callback.answer("✅ Запрос отменен", show_alert=True)
     manager.show_mode = ShowMode.EDIT
     await manager.switch_to(MyPaymentRequests.list)
