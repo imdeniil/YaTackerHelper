@@ -65,6 +65,35 @@ async def get_confirm_data(dialog_manager: DialogManager, **kwargs) -> dict[str,
     }
 
 
+async def get_success_data(dialog_manager: DialogManager, **kwargs) -> dict[str, Any]:
+    """Получает данные для окна успешного создания"""
+    user = kwargs.get("user")
+    payment_request_id = dialog_manager.dialog_data.get("payment_request_id")
+    billing_contacts_count = dialog_manager.dialog_data.get("billing_contacts_count", 0)
+
+    async with get_session() as session:
+        payment_request = await PaymentRequestCRUD.get_payment_request_by_id(session, payment_request_id)
+
+        if not payment_request:
+            return {"error": "Request not found"}
+
+        # Форматируем полное сообщение о запросе
+        request_text = format_payment_request_message(
+            request_id=payment_request.id,
+            title=payment_request.title,
+            amount=payment_request.amount,
+            comment=payment_request.comment,
+            created_by_name=user.display_name,
+            status=payment_request.status,
+            created_at=payment_request.created_at,
+        )
+
+        return {
+            "request_text": request_text,
+            "billing_contacts_count": billing_contacts_count,
+        }
+
+
 # ============ Message Input Handlers ============
 
 async def on_title_input(message: Message, widget: MessageInput, manager: DialogManager):
@@ -260,39 +289,23 @@ async def on_send_request(callback: CallbackQuery, button: Button, manager: Dial
                     except Exception as e:
                         logger.error(f"Error sending notification to {billing_contact.telegram_username}: {e}")
 
-            # Отправляем Worker полноценное сообщение со статусом (для дальнейшего обновления)
-            worker_text = format_payment_request_message(
+            # Сохраняем ID текущего сообщения диалога как worker_message_id
+            # (это сообщение будет обновляться при изменении статуса)
+            current_message_id = callback.message.message_id
+
+            await PaymentRequestCRUD.set_worker_message_id(
+                session=session,
                 request_id=payment_request.id,
-                title=payment_request.title,
-                amount=payment_request.amount,
-                comment=payment_request.comment,
-                created_by_name=user.display_name,
-                status=payment_request.status,
-                created_at=payment_request.created_at,
+                message_id=current_message_id,
             )
 
-            # Добавляем информацию о billing контактах
-            worker_text += f"\n\n📤 Уведомление отправлено billing контактам ({len(billing_contacts)})"
+            # Сохраняем данные для отображения в окне success
+            manager.dialog_data["payment_request_id"] = payment_request.id
+            manager.dialog_data["billing_contacts_count"] = len(billing_contacts)
 
-            # Отправляем Worker и сохраняем message_id для будущих обновлений
-            if user.telegram_id:
-                try:
-                    worker_message = await callback.bot.send_message(
-                        chat_id=user.telegram_id,
-                        text=worker_text,
-                    )
-
-                    await PaymentRequestCRUD.set_worker_message_id(
-                        session=session,
-                        request_id=payment_request.id,
-                        message_id=worker_message.message_id,
-                    )
-                except Exception as e:
-                    logger.error(f"Error sending confirmation to worker: {e}")
-
-        await callback.answer("✅ Запрос на оплату отправлен!", show_alert=True)
-        await manager.done()
-        await manager.start(MainMenu.main)
+        # Переходим на окно успешного создания вместо закрытия диалога
+        manager.show_mode = ShowMode.EDIT
+        await manager.switch_to(PaymentRequestCreation.success)
 
     except Exception as e:
         logger.error(f"Error creating payment request: {e}", exc_info=True)
@@ -382,6 +395,22 @@ confirm_window = Window(
 )
 
 
+# Окно 6: Успешное создание запроса
+success_window = Window(
+    Format("{request_text}"),
+    Format("\n\n📤 Уведомление отправлено {billing_contacts_count} billing контакту(ам)"),
+    Const("\n\n✅ <b>Запрос на оплату успешно создан!</b>\n"),
+    Const("Это окно будет обновляться при изменении статуса запроса."),
+    Button(
+        Const("🏠 Главное меню"),
+        id="go_to_main_menu",
+        on_click=lambda c, b, m: m.start(MainMenu.main),
+    ),
+    state=PaymentRequestCreation.success,
+    getter=get_success_data,
+)
+
+
 # Создаем диалог
 payment_request_creation_dialog = Dialog(
     title_window,
@@ -389,4 +418,5 @@ payment_request_creation_dialog = Dialog(
     comment_window,
     attach_invoice_window,
     confirm_window,
+    success_window,
 )

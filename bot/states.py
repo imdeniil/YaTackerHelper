@@ -46,6 +46,7 @@ class PaymentRequestCreation(StatesGroup):
     enter_comment = State()  # Ввод комментария
     attach_invoice = State()  # Прикрепление счета (опционально)
     confirm = State()  # Подтверждение запроса
+    success = State()  # Успешное создание запроса
 
 
 class MyPaymentRequests(StatesGroup):
