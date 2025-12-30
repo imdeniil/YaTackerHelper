@@ -25,6 +25,11 @@ class SelectDate(StatesGroup):
     waiting_for_date = State()
 
 
+# FSM для отмены с комментарием
+class CancelWithComment(StatesGroup):
+    waiting_for_comment = State()
+
+
 def get_payment_request_keyboard(request_id: int, status: PaymentRequestStatus) -> InlineKeyboardMarkup:
     """Генерирует клавиатуру для запроса на оплату в зависимости от статуса
 
@@ -512,15 +517,79 @@ async def on_date_input(message: Message, state: FSMContext):
 
 
 @payment_callbacks_router.callback_query(F.data.startswith("pay_cancel:"))
-async def on_payment_cancel(callback: CallbackQuery):
-    """Обработчик кнопки 'Отменить'"""
+async def on_payment_cancel(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Отменить' - запрашивает комментарий"""
     request_id = int(callback.data.split(":")[1])
 
+    # Проверяем что запрос существует
     async with get_session() as session:
+        payment_request = await PaymentRequestCRUD.get_payment_request_by_id(session, request_id)
+
+        if not payment_request:
+            await callback.answer("❌ Запрос не найден", show_alert=True)
+            return
+
+        # Проверяем что запрос еще можно отменить
+        if payment_request.status in [PaymentRequestStatus.PAID, PaymentRequestStatus.CANCELLED]:
+            await callback.answer("❌ Запрос уже обработан", show_alert=True)
+            return
+
+    # Сохраняем request_id в state и запрашиваем комментарий
+    await state.set_state(CancelWithComment.waiting_for_comment)
+    await state.update_data(request_id=request_id)
+
+    await callback.message.answer(
+        f"❌ <b>Отмена запроса на оплату #{request_id}</b>\n\n"
+        f"Пожалуйста, укажите причину отмены.\n"
+        f"Этот комментарий увидит Worker.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🚫 Отменить действие", callback_data=f"cancel_action:{request_id}")]
+        ])
+    )
+    await callback.answer()
+
+
+@payment_callbacks_router.callback_query(F.data.startswith("pay_cancel_schedule:"))
+async def on_cancel_schedule_selection(callback: CallbackQuery):
+    """Обработчик отмены выбора даты"""
+    await callback.message.delete()
+    await callback.answer("Выбор даты отменен")
+
+
+@payment_callbacks_router.callback_query(F.data.startswith("cancel_action:"))
+async def on_cancel_action(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Отменить действие' при вводе комментария отмены"""
+    await state.clear()
+    await callback.message.delete()
+    await callback.answer("Действие отменено")
+
+
+@payment_callbacks_router.message(CancelWithComment.waiting_for_comment)
+async def on_cancel_comment_received(message: Message, state: FSMContext, **kwargs):
+    """Обработчик получения комментария для отмены запроса"""
+    if not message.text:
+        await message.answer("❌ Пожалуйста, отправьте текстовое сообщение с причиной отмены.")
+        return
+
+    # Получаем user из middleware_data
+    user = kwargs.get("user")
+
+    cancel_comment = message.text.strip()
+    data = await state.get_data()
+    request_id = data.get("request_id")
+
+    if not request_id:
+        await message.answer("❌ Ошибка: ID запроса не найден")
+        await state.clear()
+        return
+
+    async with get_session() as session:
+        # Отменяем запрос
         payment_request = await PaymentRequestCRUD.cancel_payment_request(session, request_id)
 
         if not payment_request:
-            await callback.answer("❌ Ошибка при отмене запроса", show_alert=True)
+            await message.answer("❌ Ошибка при отмене запроса")
+            await state.clear()
             return
 
         # Обновляем сообщения у ВСЕХ billing контактов
@@ -538,7 +607,7 @@ async def on_payment_cancel(callback: CallbackQuery):
 
         for notification in billing_notifications:
             try:
-                await callback.bot.edit_message_text(
+                await message.bot.edit_message_text(
                     chat_id=notification.chat_id,
                     message_id=notification.message_id,
                     text=new_text,
@@ -547,32 +616,33 @@ async def on_payment_cancel(callback: CallbackQuery):
             except Exception as e:
                 logger.error(f"Error updating billing notification {notification.id}: {e}")
 
-        # Обновляем сообщение Worker (вместо создания нового)
-        if payment_request.worker_message_id and payment_request.created_by.telegram_id:
+        # Отправляем НОВОЕ уведомление Worker (не редактируем)
+        if payment_request.created_by.telegram_id:
             try:
-                worker_text = format_payment_request_message(
-                    request_id=payment_request.id,
-                    title=payment_request.title,
-                    amount=payment_request.amount,
-                    comment=payment_request.comment,
-                    created_by_name=payment_request.created_by.display_name,
-                    status=payment_request.status,
-                    created_at=payment_request.created_at,
+                worker_notification = (
+                    f"❌ <b>Запрос на оплату #{payment_request.id} отменен</b>\n\n"
+                    f"<b>Название:</b> {payment_request.title}\n"
+                    f"<b>Сумма:</b> {payment_request.amount} ₽\n\n"
+                    f"<b>Причина отмены:</b> {cancel_comment}\n"
+                    f"<b>Отменил:</b> {user.display_name if user else 'Billing контакт'}"
                 )
 
-                await callback.bot.edit_message_text(
+                # Кнопка в главное меню
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🏠 Главное меню", callback_data="goto_main_menu")]
+                ])
+
+                await message.bot.send_message(
                     chat_id=payment_request.created_by.telegram_id,
-                    message_id=payment_request.worker_message_id,
-                    text=worker_text,
+                    text=worker_notification,
+                    reply_markup=keyboard,
                 )
             except Exception as e:
-                logger.error(f"Error updating worker message: {e}")
+                logger.error(f"Error notifying worker: {e}")
 
-    await callback.answer("✅ Запрос отменен", show_alert=True)
+        await message.answer(
+            f"✅ Запрос #{request_id} отменен!\n"
+            f"Worker получил уведомление с причиной отмены."
+        )
 
-
-@payment_callbacks_router.callback_query(F.data.startswith("pay_cancel_schedule:"))
-async def on_cancel_schedule_selection(callback: CallbackQuery):
-    """Обработчик отмены выбора даты"""
-    await callback.message.delete()
-    await callback.answer("Выбор даты отменен")
+    await state.clear()
