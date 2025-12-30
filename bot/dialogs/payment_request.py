@@ -106,10 +106,6 @@ async def on_comment_input(message: Message, widget: MessageInput, manager: Dial
     """Обработчик ввода комментария"""
     comment = message.text.strip()
 
-    if not comment:
-        await message.answer("❌ Комментарий не может быть пустым. Попробуйте еще раз:")
-        return
-
     if len(comment) > 1000:
         await message.answer("❌ Комментарий слишком длинный (максимум 1000 символов). Попробуйте еще раз:")
         return
@@ -131,6 +127,13 @@ async def on_invoice_document(message: Message, widget: MessageInput, manager: D
 
 
 # ============ Button Handlers ============
+
+async def on_skip_comment(callback: CallbackQuery, button: Button, manager: DialogManager):
+    """Пропустить комментарий"""
+    manager.dialog_data["comment"] = "—"  # Дефолтное значение
+    manager.show_mode = ShowMode.EDIT
+    await manager.switch_to(PaymentRequestCreation.attach_invoice)
+
 
 async def on_skip_invoice(callback: CallbackQuery, button: Button, manager: DialogManager):
     """Пропустить прикрепление счета"""
@@ -316,9 +319,13 @@ comment_window = Window(
     Format("💰 <b>Создание запроса на оплату</b>\n\n"
            "Название: <i>{title}</i>\n"
            "Сумма: <b>{amount} ₽</b>\n\n"
-           "Шаг 3 из 4: Введите комментарий к запросу\n\n"
-           "Например: <i>Аванс 50%, остальное после сдачи проекта</i>"),
-    Cancel(Const("❌ Отмена")),
+           "Шаг 3 из 4: Введите комментарий к запросу (опционально)\n\n"
+           "Например: <i>Аванс 50%, остальное после сдачи проекта</i>\n"
+           "Или нажмите <b>Пропустить</b>"),
+    Column(
+        Button(Const("⏭️ Пропустить"), id="skip_comment", on_click=on_skip_comment),
+        Cancel(Const("❌ Отмена")),
+    ),
     MessageInput(on_comment_input),
     state=PaymentRequestCreation.enter_comment,
     getter=get_comment_data,
