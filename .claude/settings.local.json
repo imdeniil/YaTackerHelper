@@ -36,7 +36,9 @@
       "Bash(cmd /c \"if not exist migrations mkdir migrations\")",
       "Bash(alembic revision:*)",
       "Bash(alembic upgrade:*)",
-      "Bash(alembic current:*)"
+      "Bash(alembic current:*)",
+      "Bash(grep:*)",
+      "Bash(alembic downgrade:*)"
     ],
     "deny": [],
     "ask": []
