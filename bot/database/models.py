@@ -112,7 +112,7 @@ class PaymentRequest(Base):
     invoice_file_id = Column(String, nullable=True)
 
     # Статус и даты
-    status = Column(SQLEnum(PaymentRequestStatus), nullable=False, default=PaymentRequestStatus.PENDING.value, index=True)
+    status = Column(SQLEnum(PaymentRequestStatus, values_callable=lambda x: [e.value for e in x]), nullable=False, default=PaymentRequestStatus.PENDING.value, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
