@@ -123,6 +123,11 @@ async def get_user_management_data(dialog_manager: DialogManager, **kwargs) -> d
     if tracker_users_map:
         dialog_manager.dialog_data["tracker_users_map"] = tracker_users_map
 
+    # Подготавливаем tracker_login для отображения
+    tracker_login_display = new_user_data.get("tracker_login", "Не указан")
+    if tracker_login_display is None:
+        tracker_login_display = "Не указан"
+
     return {
         "mode": mode,
         "step": step,
@@ -132,6 +137,7 @@ async def get_user_management_data(dialog_manager: DialogManager, **kwargs) -> d
         "is_owner": user.role == UserRole.OWNER if user else False,
         "selected_user": selected_user,
         "new_user_data": new_user_data,
+        "tracker_login_display": tracker_login_display,
         "tracker_users": tracker_users,
         "roles": roles_list,
         "billing_contact_options": billing_contact_options,
@@ -553,7 +559,7 @@ user_management_window = Window(
         "➕ <b>Создание пользователя</b>\n\n"
         "Шаг 3/4: Выберите роль:\n\n"
         "Telegram: @{new_user_data[username]}\n"
-        "Tracker: {new_user_data.get('tracker_login', 'Не указан')}",
+        "Tracker: {tracker_login_display}",
         when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "role",
     ),
 
