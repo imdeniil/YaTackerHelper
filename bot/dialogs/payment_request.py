@@ -61,7 +61,7 @@ async def get_confirm_data(dialog_manager: DialogManager, **kwargs) -> dict[str,
         "title": title,
         "amount": amount,
         "comment": comment,
-        "has_invoice": invoice_file_id is not None,
+        "invoice_status": "✅ Прикреплен" if invoice_file_id else "❌ Не прикреплен",
     }
 
 
@@ -354,7 +354,7 @@ confirm_window = Window(
            "Название: <i>{title}</i>\n"
            "Сумма: <b>{amount} ₽</b>\n"
            "Комментарий: <i>{comment}</i>\n"
-           "Счет: {'✅ Прикреплен' if has_invoice else '❌ Не прикреплен'}\n\n"
+           "Счет: {invoice_status}\n\n"
            "Отправить запрос на оплату?"),
     Column(
         Button(Const("✅ Отправить"), id="send_request", on_click=on_send_request),
