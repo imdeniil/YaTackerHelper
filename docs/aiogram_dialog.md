@@ -363,6 +363,122 @@ async def clone_project_background_with_manager(
 
 ---
 
+## Обработка устаревших диалоговых окон (UnknownIntent)
+
+### ❌ Проблема
+
+При перезапуске бота или истечении контекста диалога пользователь может нажать на кнопки в старом диалоговом окне. aiogram-dialog выбрасывает исключение `UnknownIntent`:
+
+```
+aiogram_dialog.api.exceptions.UnknownIntent: Context not found for intent id: 1ca1f9
+```
+
+**Причина:**
+- Контекст диалога хранится в MemoryStorage и теряется при перезапуске
+- intent_id не существует после потери контекста
+- Ошибка возникает в middleware aiogram-dialog, ДО обработки update
+
+### ✅ Решение: Error Handler
+
+**ВАЖНО:** Middleware НЕ поможет, так как ошибка возникает в middleware aiogram-dialog, который выполняется раньше.
+
+Правильное решение - **глобальный error handler**:
+
+```python
+# bot/middlewares/unknown_intent.py
+from aiogram import Router
+from aiogram.types import ErrorEvent, CallbackQuery
+from aiogram_dialog.api.exceptions import UnknownIntent
+
+unknown_intent_router = Router()
+
+@unknown_intent_router.error()
+async def handle_unknown_intent(event: ErrorEvent):
+    """Error handler для UnknownIntent исключений"""
+
+    # Проверяем что это UnknownIntent ошибка
+    if not isinstance(event.exception, UnknownIntent):
+        return
+
+    # Обрабатываем только callback query
+    if not isinstance(event.update.callback_query, CallbackQuery):
+        return
+
+    callback = event.update.callback_query
+
+    try:
+        # Удаляем старое сообщение с устаревшими кнопками
+        await callback.message.delete()
+    except Exception:
+        pass
+
+    # Отправляем новое сообщение
+    await callback.message.answer(
+        "⚠️ <b>Это окно устарело</b>\n\n"
+        "Используйте команду /start для возврата в главное меню."
+    )
+
+    # Отвечаем на callback чтобы убрать "часики" в Telegram
+    await callback.answer("Окно устарело, используйте /start")
+
+    # Возвращаем True чтобы отметить ошибку как обработанную
+    return True
+```
+
+### Регистрация в main.py
+
+```python
+from bot.middlewares import unknown_intent_router
+
+async def main():
+    # ...
+
+    # Регистрация роутеров
+    dp.include_router(unknown_intent_router)  # Error handler должен быть первым
+    dp.include_router(commands_router)
+    # ... остальные роутеры
+```
+
+### Почему именно Error Handler?
+
+1. **Глобальная обработка**
+   - Ловит исключения на уровне диспетчера
+   - Работает даже если ошибка в middleware aiogram-dialog
+   - Не зависит от порядка middleware
+
+2. **Приоритет**
+   - Error handlers обрабатываются после всех middleware
+   - Могут перехватить любое необработанное исключение
+
+3. **Возвращает True**
+   - Помечает ошибку как обработанную
+   - Предотвращает появление в логах как необработанное исключение
+
+### ❌ Почему Middleware НЕ работает
+
+```python
+# ❌ НЕПРАВИЛЬНО - middleware выполняется ПОСЛЕ aiogram-dialog middleware
+class UnknownIntentMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event, data):
+        try:
+            return await handler(event, data)
+        except UnknownIntent:  # ← Не перехватит, ошибка раньше
+            # ...
+```
+
+**Проблема:**
+- aiogram-dialog middleware выполняется раньше
+- Исключение выбрасывается ДО вашего middleware
+- Ошибка не перехватывается
+
+### Реализация в проекте
+
+- **Error handler:** `bot/middlewares/unknown_intent.py`
+- **Регистрация:** `main.py:129` (первый роутер)
+- **Экспорт:** `bot/middlewares/__init__.py`
+
+---
+
 ## Источники
 
 - [aiogram-dialog Documentation](https://aiogram-dialog.readthedocs.io/)
@@ -374,6 +490,11 @@ async def clone_project_background_with_manager(
 ---
 
 ## История изменений
+
+### 2025-12-30
+- Добавлен раздел "Обработка устаревших диалоговых окон (UnknownIntent)"
+- Описано решение через Error Handler вместо Middleware
+- Добавлены примеры и объяснение почему middleware не работает
 
 ### 2025-10-09
 - Переписан документ с фокусом на проблему Progress виджета
