@@ -69,6 +69,10 @@ async def get_confirm_data(dialog_manager: DialogManager, **kwargs) -> dict[str,
 
 async def on_title_input(message: Message, widget: MessageInput, manager: DialogManager):
     """Обработчик ввода названия"""
+    if not message.text:
+        await message.answer("❌ Пожалуйста, отправьте текстовое сообщение")
+        return
+
     title = message.text.strip()
 
     if not title:
@@ -86,6 +90,10 @@ async def on_title_input(message: Message, widget: MessageInput, manager: Dialog
 
 async def on_amount_input(message: Message, widget: MessageInput, manager: DialogManager):
     """Обработчик ввода суммы"""
+    if not message.text:
+        await message.answer("❌ Пожалуйста, отправьте текстовое сообщение")
+        return
+
     amount = message.text.strip()
 
     # Валидация: проверяем что это число
@@ -104,6 +112,10 @@ async def on_amount_input(message: Message, widget: MessageInput, manager: Dialo
 
 async def on_comment_input(message: Message, widget: MessageInput, manager: DialogManager):
     """Обработчик ввода комментария"""
+    if not message.text:
+        await message.answer("❌ Пожалуйста, отправьте текстовое сообщение или нажмите кнопку Пропустить")
+        return
+
     comment = message.text.strip()
 
     if len(comment) > 1000:

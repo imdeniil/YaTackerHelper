@@ -210,6 +210,10 @@ async def on_switch_to_delete(callback: CallbackQuery, button: Button, manager: 
 
 async def on_text_input(message: Message, widget: MessageInput, manager: DialogManager):
     """Обработка текстового ввода в зависимости от шага"""
+    if not message.text:
+        await message.answer("❌ Пожалуйста, отправьте текстовое сообщение")
+        return
+
     mode = manager.dialog_data.get("mode")
     step = manager.dialog_data.get("step")
 
@@ -471,7 +475,7 @@ user_management_window = Window(
         "👑 Владелец\n"
         "📊 Менеджер\n"
         "👷 Работник\n"
-        "💳 - Плательщик",
+        "💳 Плательщик",
         when=lambda data, widget, manager: data["mode"] == "list",
     ),
 

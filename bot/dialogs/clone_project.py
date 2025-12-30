@@ -233,6 +233,10 @@ async def on_new_name_input(
     message: Message, widget: MessageInput, manager: DialogManager
 ):
     """Обработчик ввода нового имени проекта."""
+    if not message.text:
+        await message.answer("❌ Пожалуйста, отправьте текстовое сообщение")
+        return
+
     new_name = message.text.strip()
     manager.dialog_data["new_name"] = new_name
 
