@@ -206,12 +206,16 @@ async def on_back_to_all_list(callback: CallbackQuery, button: Button, manager: 
 all_list_window = Window(
     Const("💰 <b>Все запросы на оплату</b>\n"),
     Format("Всего запросов: {total_count}\nПоказано: {count}\n", when="count"),
+    Const(
+        "\n<i>Статусы:</i> ⏳ Ожидает • 📅 Запланировано • ✅ Оплачено • ❌ Отменено\n",
+        when="count"
+    ),
     Const("\nЗапросов на оплату пока нет.", when=lambda data, widget, manager: data.get("count", 0) == 0),
 
     # Список запросов
     ScrollingGroup(
         Select(
-            Format("{item[status_emoji]} #{item[id]} {item[title]}\n{item[amount]} ₽ • {item[creator]} • {item[created_at]}"),
+            Format("{item[status_emoji]} #{item[id]}|{item[amount]}|{item[title]}"),
             id="all_request_select",
             item_id_getter=lambda x: str(x["id"]),
             items="requests",
