@@ -6,8 +6,10 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram_dialog import DialogManager, StartMode
 
 from bot.database import get_session, PaymentRequestCRUD, UserCRUD, PaymentRequestStatus, BillingNotificationCRUD
+from bot.states import MainMenu
 
 logger = logging.getLogger(__name__)
 
@@ -536,15 +538,20 @@ async def on_payment_cancel(callback: CallbackQuery, state: FSMContext):
 
     # Сохраняем request_id в state и запрашиваем комментарий
     await state.set_state(CancelWithComment.waiting_for_comment)
-    await state.update_data(request_id=request_id)
 
-    await callback.message.answer(
+    # Отправляем сообщение и сохраняем его message_id в state
+    sent_message = await callback.message.answer(
         f"❌ <b>Отмена запроса на оплату #{request_id}</b>\n\n"
         f"Пожалуйста, укажите причину отмены.\n"
         f"Этот комментарий увидит Worker.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🚫 Отменить действие", callback_data=f"cancel_action:{request_id}")]
         ])
+    )
+
+    await state.update_data(
+        request_id=request_id,
+        cancel_request_message_id=sent_message.message_id
     )
     await callback.answer()
 
@@ -564,6 +571,29 @@ async def on_cancel_action(callback: CallbackQuery, state: FSMContext):
     await callback.answer("Действие отменено")
 
 
+@payment_callbacks_router.callback_query(F.data == "cancel_goto_main_menu")
+async def on_cancel_goto_main_menu(callback: CallbackQuery, dialog_manager: DialogManager):
+    """Обработчик кнопки 'Главное меню' после отмены запроса"""
+    # Удаляем кнопку из сообщения (оставляем только текст)
+    try:
+        await callback.bot.edit_message_reply_markup(
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id,
+            reply_markup=None
+        )
+    except Exception as e:
+        logger.error(f"Error removing button: {e}")
+
+    await callback.answer()
+
+    # Закрываем текущий диалог если есть
+    if dialog_manager.has_context():
+        await dialog_manager.done()
+
+    # Запускаем главное меню
+    await dialog_manager.start(MainMenu.main, mode=StartMode.RESET_STACK)
+
+
 @payment_callbacks_router.message(CancelWithComment.waiting_for_comment)
 async def on_cancel_comment_received(message: Message, state: FSMContext, **kwargs):
     """Обработчик получения комментария для отмены запроса"""
@@ -577,6 +607,7 @@ async def on_cancel_comment_received(message: Message, state: FSMContext, **kwar
     cancel_comment = message.text.strip()
     data = await state.get_data()
     request_id = data.get("request_id")
+    cancel_request_message_id = data.get("cancel_request_message_id")
 
     if not request_id:
         await message.answer("❌ Ошибка: ID запроса не найден")
@@ -640,9 +671,39 @@ async def on_cancel_comment_received(message: Message, state: FSMContext, **kwar
             except Exception as e:
                 logger.error(f"Error notifying worker: {e}")
 
-        await message.answer(
-            f"✅ Запрос #{request_id} отменен!\n"
-            f"Worker получил уведомление с причиной отмены."
-        )
+        # Редактируем сообщение с запросом комментария
+        if cancel_request_message_id:
+            try:
+                confirmation_text = (
+                    f"✅ <b>Запрос #{request_id} отменен</b>\n\n"
+                    f"<b>Причина отмены:</b> {cancel_comment}\n\n"
+                    f"Worker получил уведомление с причиной отмены."
+                )
+
+                # Добавляем кнопку "Главное меню"
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🏠 Главное меню", callback_data="cancel_goto_main_menu")]
+                ])
+
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=cancel_request_message_id,
+                    text=confirmation_text,
+                    reply_markup=keyboard,
+                )
+
+                # Удаляем сообщение пользователя с комментарием для чистоты чата
+                try:
+                    await message.delete()
+                except Exception:
+                    pass  # Не критично если не удалось удалить
+
+            except Exception as e:
+                logger.error(f"Error editing cancel request message: {e}")
+                # Если не удалось отредактировать - отправляем новое
+                await message.answer(
+                    f"✅ Запрос #{request_id} отменен!\n"
+                    f"Worker получил уведомление с причиной отмены."
+                )
 
     await state.clear()
