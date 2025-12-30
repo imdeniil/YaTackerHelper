@@ -9,7 +9,8 @@ from aiogram_dialog.widgets.kbd import Button, Cancel, ScrollingGroup, Select, R
 from aiogram_dialog.widgets.text import Const, Format, Case
 
 from bot.states import MyPaymentRequests
-from bot.database import get_session, PaymentRequestCRUD, PaymentRequestStatus
+from bot.database import get_session, PaymentRequestCRUD, PaymentRequestStatus, UserCRUD
+from bot.handlers.payment_callbacks import format_payment_request_message, get_payment_request_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +212,44 @@ async def on_cancel_request(callback: CallbackQuery, button: Button, manager: Di
         if not payment_request:
             await callback.answer("❌ Ошибка при отмене запроса", show_alert=True)
             return
+
+        # Обновляем сообщение у billing контакта (если взят в работу) или уведомляем всех
+        new_text = format_payment_request_message(
+            request_id=payment_request.id,
+            title=payment_request.title,
+            amount=payment_request.amount,
+            comment=payment_request.comment,
+            created_by_name=payment_request.created_by.display_name,
+            status=payment_request.status,
+            created_at=payment_request.created_at,
+        )
+
+        if payment_request.processing_by and payment_request.processing_by.telegram_id and payment_request.billing_message_id:
+            # Если запрос был взят в работу - обновляем сообщение у processing_by
+            try:
+                await callback.bot.edit_message_text(
+                    chat_id=payment_request.processing_by.telegram_id,
+                    message_id=payment_request.billing_message_id,
+                    text=new_text,
+                    reply_markup=get_payment_request_keyboard(payment_request.id, payment_request.status),
+                )
+            except Exception as e:
+                logger.error(f"Error updating billing message: {e}")
+        else:
+            # Если запрос не был взят в работу - отправляем уведомление всем billing контактам
+            billing_contacts = await UserCRUD.get_billing_contacts(session)
+            keyboard = get_payment_request_keyboard(payment_request.id, payment_request.status)
+
+            for billing_contact in billing_contacts:
+                if billing_contact.telegram_id:
+                    try:
+                        await callback.bot.send_message(
+                            chat_id=billing_contact.telegram_id,
+                            text=f"❌ <b>Запрос отменен Worker</b>\n\n{new_text}",
+                            reply_markup=keyboard,
+                        )
+                    except Exception as e:
+                        logger.error(f"Error notifying billing contact {billing_contact.telegram_username}: {e}")
 
     await callback.answer("✅ Запрос отменен", show_alert=True)
     manager.show_mode = ShowMode.EDIT
