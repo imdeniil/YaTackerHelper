@@ -22,29 +22,32 @@ async def get_my_requests_list_data(dialog_manager: DialogManager, **kwargs) -> 
     if not user:
         return {"requests": [], "count": 0}
 
-    # Получаем фильтр из dialog_data (если есть)
-    status_filter = dialog_manager.dialog_data.get("status_filter")
+    # Получаем фильтр из dialog_data (по умолчанию - активные)
+    status_filter = dialog_manager.dialog_data.get("status_filter", "active")
 
     async with get_session() as session:
         # Получаем все запросы пользователя
         all_requests = await PaymentRequestCRUD.get_user_payment_requests(session, user.id)
 
-        # Применяем фильтр если есть
-        if status_filter and status_filter != "all":
-            if status_filter == "scheduled":
-                # Фильтр для запланированных (оба статуса)
-                requests = [
-                    r for r in all_requests
-                    if r.status in [PaymentRequestStatus.SCHEDULED_TODAY, PaymentRequestStatus.SCHEDULED_DATE]
-                ]
-            else:
-                try:
-                    filter_status = PaymentRequestStatus(status_filter)
-                    requests = [r for r in all_requests if r.status == filter_status]
-                except ValueError:
-                    requests = all_requests
+        # Применяем фильтр
+        if status_filter == "active":
+            # Активные: все кроме PAID и CANCELLED
+            requests = [
+                r for r in all_requests
+                if r.status not in [PaymentRequestStatus.PAID, PaymentRequestStatus.CANCELLED]
+            ]
+        elif status_filter == "completed":
+            # Завершенные: только PAID
+            requests = [r for r in all_requests if r.status == PaymentRequestStatus.PAID]
+        elif status_filter == "cancelled":
+            # Отмененные: только CANCELLED
+            requests = [r for r in all_requests if r.status == PaymentRequestStatus.CANCELLED]
         else:
-            requests = all_requests
+            # На случай старых фильтров - показываем активные
+            requests = [
+                r for r in all_requests
+                if r.status not in [PaymentRequestStatus.PAID, PaymentRequestStatus.CANCELLED]
+            ]
 
         # Форматируем для отображения
         formatted_requests = []
@@ -80,7 +83,7 @@ async def get_my_requests_list_data(dialog_manager: DialogManager, **kwargs) -> 
         "requests": formatted_requests,
         "count": len(formatted_requests),
         "total_count": len(all_requests),
-        "current_filter": status_filter or "all",
+        "current_filter": status_filter,
     }
 
 
@@ -129,27 +132,21 @@ async def get_request_details_data(dialog_manager: DialogManager, **kwargs) -> d
 
 # ============ Button Handlers ============
 
-async def on_filter_all(callback: CallbackQuery, button: Button, manager: DialogManager):
-    """Фильтр: все запросы"""
-    manager.dialog_data["status_filter"] = "all"
+async def on_filter_active(callback: CallbackQuery, button: Button, manager: DialogManager):
+    """Фильтр: активные запросы"""
+    manager.dialog_data["status_filter"] = "active"
     await manager.update({})
 
 
-async def on_filter_pending(callback: CallbackQuery, button: Button, manager: DialogManager):
-    """Фильтр: ожидающие"""
-    manager.dialog_data["status_filter"] = PaymentRequestStatus.PENDING.value
+async def on_filter_completed(callback: CallbackQuery, button: Button, manager: DialogManager):
+    """Фильтр: завершенные запросы"""
+    manager.dialog_data["status_filter"] = "completed"
     await manager.update({})
 
 
-async def on_filter_scheduled(callback: CallbackQuery, button: Button, manager: DialogManager):
-    """Фильтр: запланированные (today + date)"""
-    manager.dialog_data["status_filter"] = "scheduled"
-    await manager.update({})
-
-
-async def on_filter_paid(callback: CallbackQuery, button: Button, manager: DialogManager):
-    """Фильтр: оплаченные"""
-    manager.dialog_data["status_filter"] = PaymentRequestStatus.PAID.value
+async def on_filter_cancelled(callback: CallbackQuery, button: Button, manager: DialogManager):
+    """Фильтр: отмененные запросы"""
+    manager.dialog_data["status_filter"] = "cancelled"
     await manager.update({})
 
 
@@ -277,29 +274,6 @@ list_window = Window(
     Format("Всего запросов: {total_count}\nПоказано: {count}\n", when="count"),
     Const("\nУ вас пока нет запросов на оплату.", when=lambda data, widget, manager: data.get("count", 0) == 0),
 
-    # Фильтры
-    Row(
-        Button(
-            Const("📋 Все"),
-            id="filter_all",
-            on_click=on_filter_all,
-            when=lambda data, widget, manager: data.get("current_filter") != "all",
-        ),
-        Button(
-            Const("⏳ Ожидают"),
-            id="filter_pending",
-            on_click=on_filter_pending,
-            when=lambda data, widget, manager: data.get("current_filter") != PaymentRequestStatus.PENDING.value,
-        ),
-        Button(
-            Const("✅ Оплачены"),
-            id="filter_paid",
-            on_click=on_filter_paid,
-            when=lambda data, widget, manager: data.get("current_filter") != PaymentRequestStatus.PAID.value,
-        ),
-        when="count",
-    ),
-
     # Список запросов
     ScrollingGroup(
         Select(
@@ -312,6 +286,29 @@ list_window = Window(
         id="requests_scroll",
         width=1,
         height=6,
+        when="count",
+    ),
+
+    # Фильтры (показываем только 2 кнопки для других фильтров)
+    Row(
+        Button(
+            Const("✅ Завершенные"),
+            id="filter_completed",
+            on_click=on_filter_completed,
+            when=lambda data, widget, manager: data.get("current_filter") != "completed",
+        ),
+        Button(
+            Const("❌ Отмененные"),
+            id="filter_cancelled",
+            on_click=on_filter_cancelled,
+            when=lambda data, widget, manager: data.get("current_filter") != "cancelled",
+        ),
+        Button(
+            Const("📋 Активные"),
+            id="filter_active",
+            on_click=on_filter_active,
+            when=lambda data, widget, manager: data.get("current_filter") != "active",
+        ),
         when="count",
     ),
 
