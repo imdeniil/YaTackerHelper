@@ -108,11 +108,13 @@ async def get_all_request_details_data(dialog_manager: DialogManager, **kwargs) 
             "created_at": payment_request.created_at.strftime("%d.%m.%Y %H:%M"),
             "has_invoice": payment_request.invoice_file_id is not None,
             "invoice_file_id": payment_request.invoice_file_id,
+            "invoice_status": "Прикреплен" if payment_request.invoice_file_id else "Не прикреплен",
             "processing_by": payment_request.processing_by.display_name if payment_request.processing_by else None,
             "paid_by": payment_request.paid_by.display_name if payment_request.paid_by else None,
             "paid_at": payment_request.paid_at.strftime("%d.%m.%Y %H:%M") if payment_request.paid_at else None,
             "has_payment_proof": payment_request.payment_proof_file_id is not None,
             "payment_proof_file_id": payment_request.payment_proof_file_id,
+            "payment_proof_status": "Прикреплена" if payment_request.payment_proof_file_id else "Не прикреплена",
             "status_raw": payment_request.status,
             # Можно ли выполнять действия
             "can_mark_paid": payment_request.status in [PaymentRequestStatus.PENDING, PaymentRequestStatus.SCHEDULED_TODAY, PaymentRequestStatus.SCHEDULED_DATE],
@@ -263,8 +265,8 @@ all_details_window = Window(
     ),
     Format("<b>Взял в работу:</b> {processing_by}\n", when="processing_by"),
     Format("<b>Оплатил:</b> {paid_by}\n<b>Дата оплаты:</b> {paid_at}\n", when="paid_by"),
-    Format("\n📎 Счет: {'Прикреплен' if has_invoice else 'Не прикреплен'}"),
-    Format("\n📎 Платежка: {'Прикреплена' if has_payment_proof else 'Не прикреплена'}"),
+    Format("\n📎 Счет: {invoice_status}"),
+    Format("\n📎 Платежка: {payment_proof_status}"),
 
     Button(
         Const("📥 Скачать счет"),
