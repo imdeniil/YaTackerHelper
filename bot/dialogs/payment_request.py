@@ -19,13 +19,18 @@ logger = logging.getLogger(__name__)
 
 async def get_title_data(dialog_manager: DialogManager, **kwargs) -> dict[str, Any]:
     """Получает данные для окна ввода названия"""
-    return {}
+    return {
+        "error": dialog_manager.dialog_data.get("error"),
+    }
 
 
 async def get_amount_data(dialog_manager: DialogManager, **kwargs) -> dict[str, Any]:
     """Получает данные для окна ввода суммы"""
     title = dialog_manager.dialog_data.get("title", "")
-    return {"title": title}
+    return {
+        "title": title,
+        "error": dialog_manager.dialog_data.get("error"),
+    }
 
 
 async def get_comment_data(dialog_manager: DialogManager, **kwargs) -> dict[str, Any]:
@@ -35,6 +40,7 @@ async def get_comment_data(dialog_manager: DialogManager, **kwargs) -> dict[str,
     return {
         "title": title,
         "amount": amount,
+        "error": dialog_manager.dialog_data.get("error"),
     }
 
 
@@ -99,19 +105,24 @@ async def get_success_data(dialog_manager: DialogManager, **kwargs) -> dict[str,
 async def on_title_input(message: Message, widget: MessageInput, manager: DialogManager):
     """Обработчик ввода названия"""
     if not message.text:
-        await message.answer("❌ Пожалуйста, отправьте текстовое сообщение")
+        manager.dialog_data["error"] = "❌ Пожалуйста, отправьте текстовое сообщение"
+        await manager.update({})
         return
 
     title = message.text.strip()
 
     if not title:
-        await message.answer("❌ Название не может быть пустым. Попробуйте еще раз:")
+        manager.dialog_data["error"] = "❌ Название не может быть пустым. Попробуйте еще раз:"
+        await manager.update({})
         return
 
     if len(title) > 200:
-        await message.answer("❌ Название слишком длинное (максимум 200 символов). Попробуйте еще раз:")
+        manager.dialog_data["error"] = "❌ Название слишком длинное (максимум 200 символов). Попробуйте еще раз:"
+        await manager.update({})
         return
 
+    # Успешная валидация - очищаем ошибку и переходим дальше
+    manager.dialog_data.pop("error", None)
     manager.dialog_data["title"] = title
     manager.show_mode = ShowMode.EDIT
     await manager.switch_to(PaymentRequestCreation.enter_amount)
@@ -120,7 +131,8 @@ async def on_title_input(message: Message, widget: MessageInput, manager: Dialog
 async def on_amount_input(message: Message, widget: MessageInput, manager: DialogManager):
     """Обработчик ввода суммы"""
     if not message.text:
-        await message.answer("❌ Пожалуйста, отправьте текстовое сообщение")
+        manager.dialog_data["error"] = "❌ Пожалуйста, отправьте текстовое сообщение"
+        await manager.update({})
         return
 
     amount = message.text.strip()
@@ -131,9 +143,12 @@ async def on_amount_input(message: Message, widget: MessageInput, manager: Dialo
         if amount_float <= 0:
             raise ValueError("Amount must be positive")
     except ValueError:
-        await message.answer("❌ Некорректная сумма. Введите число больше 0 (например: 5000 или 5000.50):")
+        manager.dialog_data["error"] = "❌ Некорректная сумма. Введите число больше 0 (например: 5000 или 5000.50):"
+        await manager.update({})
         return
 
+    # Успешная валидация - очищаем ошибку и переходим дальше
+    manager.dialog_data.pop("error", None)
     manager.dialog_data["amount"] = amount
     manager.show_mode = ShowMode.EDIT
     await manager.switch_to(PaymentRequestCreation.enter_comment)
@@ -142,15 +157,19 @@ async def on_amount_input(message: Message, widget: MessageInput, manager: Dialo
 async def on_comment_input(message: Message, widget: MessageInput, manager: DialogManager):
     """Обработчик ввода комментария"""
     if not message.text:
-        await message.answer("❌ Пожалуйста, отправьте текстовое сообщение или нажмите кнопку Пропустить")
+        manager.dialog_data["error"] = "❌ Пожалуйста, отправьте текстовое сообщение или нажмите кнопку Пропустить"
+        await manager.update({})
         return
 
     comment = message.text.strip()
 
     if len(comment) > 1000:
-        await message.answer("❌ Комментарий слишком длинный (максимум 1000 символов). Попробуйте еще раз:")
+        manager.dialog_data["error"] = "❌ Комментарий слишком длинный (максимум 1000 символов). Попробуйте еще раз:"
+        await manager.update({})
         return
 
+    # Успешная валидация - очищаем ошибку и переходим дальше
+    manager.dialog_data.pop("error", None)
     manager.dialog_data["comment"] = comment
     manager.show_mode = ShowMode.EDIT
     await manager.switch_to(PaymentRequestCreation.attach_invoice)
@@ -306,6 +325,7 @@ title_window = Window(
     Const("💰 <b>Создание запроса на оплату</b>\n\n"
           "Шаг 1 из 4: Введите название для плательщика\n\n"
           "Например: <i>Оплата за дизайн логотипа</i>"),
+    Format("\n{error}\n", when="error"),
     Cancel(Const("❌ Отмена")),
     MessageInput(on_title_input),
     state=PaymentRequestCreation.enter_title,
@@ -318,6 +338,7 @@ amount_window = Window(
            "Название: <i>{title}</i>\n\n"
            "Шаг 2 из 4: Введите сумму в рублях\n\n"
            "Например: <i>5000</i> или <i>5000.50</i>"),
+    Format("\n{error}\n", when="error"),
     Cancel(Const("❌ Отмена")),
     MessageInput(on_amount_input),
     state=PaymentRequestCreation.enter_amount,
@@ -332,6 +353,7 @@ comment_window = Window(
            "Шаг 3 из 4: Введите комментарий к запросу (опционально)\n\n"
            "Например: <i>Аванс 50%, остальное после сдачи проекта</i>\n"
            "Или нажмите <b>Пропустить</b>"),
+    Format("\n{error}\n", when="error"),
     Column(
         Button(Const("⏭️ Пропустить"), id="skip_comment", on_click=on_skip_comment),
         Cancel(Const("❌ Отмена")),
