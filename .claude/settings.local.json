@@ -38,7 +38,9 @@
       "Bash(alembic upgrade:*)",
       "Bash(alembic current:*)",
       "Bash(grep:*)",
-      "Bash(alembic downgrade:*)"
+      "Bash(alembic downgrade:*)",
+      "Bash(Select-String -Pattern \"Dialog\\(\" -Path \"bot/dialogs/payment_request.py\")",
+      "Bash(Select-Object -Last 5)"
     ],
     "deny": [],
     "ask": []

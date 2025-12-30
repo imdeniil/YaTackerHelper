@@ -22,7 +22,7 @@ from bot.dialogs import (
     my_payment_requests_dialog,
     all_payment_requests_dialog,
 )
-from bot.middlewares import AuthMiddleware, MessageCleanupMiddleware, UnknownIntentMiddleware
+from bot.middlewares import AuthMiddleware, MessageCleanupMiddleware, unknown_intent_router
 from bot.database import init_db, init_default_owners
 from bot.database.database import engine
 from bot.database.models import Base
@@ -123,10 +123,10 @@ async def main(reset_database: bool = False, confirm_reset: bool = False, contin
     # Регистрация middleware
     dp.update.middleware(AuthMiddleware())
     dp.message.middleware(MessageCleanupMiddleware())
-    dp.callback_query.middleware(UnknownIntentMiddleware())
     logger.info("✅ Middleware зарегистрированы")
 
     # Регистрация роутеров
+    dp.include_router(unknown_intent_router)  # Error handler должен быть первым
     dp.include_router(commands_router)
     dp.include_router(payment_callbacks_router)
 
