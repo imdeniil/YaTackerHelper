@@ -146,7 +146,12 @@ async def main(reset_database: bool = False, confirm_reset: bool = False, contin
     logger.info("✅ Все роутеры и диалоги зарегистрированы")
 
     # Удаление вебхуков (если были)
-    await bot.delete_webhook(drop_pending_updates=True)
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        logger.info("✅ Вебхуки удалены")
+    except Exception as e:
+        logger.warning(f"⚠️ Не удалось удалить вебхуки: {e}")
+        logger.info("Продолжаем запуск...")
 
     # Запуск scheduler для напоминаний
     start_scheduler(bot)
