@@ -113,9 +113,9 @@ async def get_user_management_data(dialog_manager: DialogManager, **kwargs) -> d
         {"id": "worker", "name": "👷 Работник"},
     ]
 
-    # Список опций для billing контакта
+    # Список опций для плательщика
     billing_contact_options = [
-        {"id": "yes", "name": "💳 Да, будет получать уведомления об оплате"},
+        {"id": "yes", "name": "💳 Да, будет плательщиком"},
         {"id": "no", "name": "Нет"},
     ]
 
@@ -128,6 +128,11 @@ async def get_user_management_data(dialog_manager: DialogManager, **kwargs) -> d
     if tracker_login_display is None:
         tracker_login_display = "Не указан"
 
+    # Подготавливаем роль для отображения по-русски
+    role_display_ru = ""
+    if "role" in new_user_data:
+        role_display_ru = role_mapping.get(new_user_data["role"], {}).get("display", new_user_data["role"])
+
     return {
         "mode": mode,
         "step": step,
@@ -138,6 +143,7 @@ async def get_user_management_data(dialog_manager: DialogManager, **kwargs) -> d
         "selected_user": selected_user,
         "new_user_data": new_user_data,
         "tracker_login_display": tracker_login_display,
+        "role_display_ru": role_display_ru,
         "tracker_users": tracker_users,
         "roles": roles_list,
         "billing_contact_options": billing_contact_options,
@@ -359,7 +365,7 @@ async def on_role_selected(callback: CallbackQuery, widget: Select, manager: Dia
 
 
 async def on_billing_contact_selected(callback: CallbackQuery, widget: Select, manager: DialogManager, item_id: str):
-    """Обработка выбора статуса billing контакта"""
+    """Обработка выбора статуса плательщика"""
     new_user_data = manager.dialog_data.get("new_user_data", {})
     new_user_data["is_billing_contact"] = item_id == "yes"
     manager.dialog_data["new_user_data"] = new_user_data
@@ -435,7 +441,7 @@ async def on_back_from_edit_step(callback: CallbackQuery, button: Button, manage
 
 
 async def on_toggle_billing_contact(callback: CallbackQuery, button: Button, manager: DialogManager):
-    """Переключение статуса billing контакта"""
+    """Переключение статуса плательщика"""
     user_id = manager.dialog_data.get("selected_user_id")
     if not user_id:
         await callback.answer("❌ Пользователь не выбран", show_alert=True)
@@ -446,7 +452,7 @@ async def on_toggle_billing_contact(callback: CallbackQuery, button: Button, man
 
     if user:
         status = "включен" if user.is_billing_contact else "выключен"
-        await callback.answer(f"✅ Billing контакт {status}")
+        await callback.answer(f"✅ Плательщик {status}")
     else:
         await callback.answer("❌ Ошибка обновления")
 
@@ -464,8 +470,8 @@ user_management_window = Window(
         "Роли:\n"
         "👑 Владелец\n"
         "📊 Менеджер\n"
-        "👷 Работник\n\n"
-        "💳 - Billing контакт (получает уведомления об оплате)",
+        "👷 Работник\n"
+        "💳 - Плательщик",
         when=lambda data, widget, manager: data["mode"] == "list",
     ),
 
@@ -520,13 +526,6 @@ user_management_window = Window(
         when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "select_tracker_user",
     ),
 
-    Button(
-        Const("⏭️ Пропустить (не работает с Tracker)"),
-        id="skip_tracker",
-        on_click=on_skip_tracker,
-        when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "select_tracker_user",
-    ),
-
     ScrollingGroup(
         Select(
             Format("{item[display]} ({item[login]})"),
@@ -538,6 +537,20 @@ user_management_window = Window(
         id="tracker_users_scroll",
         width=1,
         height=6,
+        when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "select_tracker_user",
+    ),
+
+    Button(
+        Const("⏭️ Пропустить tracker"),
+        id="skip_tracker",
+        on_click=on_skip_tracker,
+        when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "select_tracker_user",
+    ),
+
+    Button(
+        Const("❌ Отмена"),
+        id="cancel_create_tracker",
+        on_click=on_switch_to_list,
         when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "select_tracker_user",
     ),
 
@@ -577,13 +590,13 @@ user_management_window = Window(
         when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "role",
     ),
 
-    # Выбор billing контакта
+    # Выбор плательщика
     Format(
         "➕ <b>Создание пользователя</b>\n\n"
-        "Шаг 4/4: Будет ли пользователь получать уведомления об оплате счетов?\n\n"
+        "Шаг 4/4: Будет ли пользователь плательщиком?\n\n"
         "Telegram: @{new_user_data[username]}\n"
-        "Tracker: {new_user_data[tracker_login]}\n"
-        "Роль: {new_user_data[role]}",
+        "Tracker: {tracker_login_display}\n"
+        "Роль: {role_display_ru}",
         when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "billing_contact",
     ),
 
@@ -605,7 +618,7 @@ user_management_window = Window(
         Const("❌ Отмена"),
         id="cancel_create",
         on_click=on_switch_to_list,
-        when=lambda data, widget, manager: data["mode"] == "create",
+        when=lambda data, widget, manager: data["mode"] == "create" and data["step"] != "select_tracker_user",
     ),
 
     # ===== РЕЖИМ: Редактирование пользователя =====
@@ -616,7 +629,7 @@ user_management_window = Window(
         "Username: {selected_user[username]}\n"
         "Tracker: {selected_user[tracker]}\n"
         "Роль: {selected_user[role_display]}\n"
-        "Billing контакт: {selected_user[billing_status]}",
+        "Плательщик: {selected_user[billing_status]}",
         when=lambda data, widget, manager: data["mode"] == "edit" and data["step"] == "",
     ),
 
@@ -640,7 +653,7 @@ user_management_window = Window(
         when=lambda data, widget, manager: data["mode"] == "edit" and data["step"] == "" and data["is_owner"],
     ),
     Button(
-        Format("💳 Billing контакт: {selected_user[billing_status]}"),
+        Format("💳 Плательщик: {selected_user[billing_status]}"),
         id="toggle_billing",
         on_click=on_toggle_billing_contact,
         when=lambda data, widget, manager: data["mode"] == "edit" and data["step"] == "" and data["is_owner"],
