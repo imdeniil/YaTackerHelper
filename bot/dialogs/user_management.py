@@ -509,7 +509,15 @@ user_management_window = Window(
     Format(
         "➕ <b>Создание пользователя</b>\n\n"
         "Шаг 2/4: Выберите пользователя Yandex Tracker:\n"
-        "Telegram: @{new_user_data[username]}",
+        "Telegram: @{new_user_data[username]}\n\n"
+        "Или пропустите, если пользователь не работает с Tracker",
+        when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "select_tracker_user",
+    ),
+
+    Button(
+        Const("⏭️ Пропустить (не работает с Tracker)"),
+        id="skip_tracker",
+        on_click=on_skip_tracker,
         when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "select_tracker_user",
     ),
 
@@ -523,14 +531,7 @@ user_management_window = Window(
         ),
         id="tracker_users_scroll",
         width=1,
-        height=8,
-        when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "select_tracker_user",
-    ),
-
-    Button(
-        Const("⏭️ Пропустить (пользователь не работает с Tracker)"),
-        id="skip_tracker",
-        on_click=on_skip_tracker,
+        height=6,
         when=lambda data, widget, manager: data["mode"] == "create" and data["step"] == "select_tracker_user",
     ),
 
