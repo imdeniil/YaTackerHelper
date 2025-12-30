@@ -7,7 +7,7 @@ from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKe
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from bot.database import get_session, PaymentRequestCRUD, UserCRUD, PaymentRequestStatus
+from bot.database import get_session, PaymentRequestCRUD, UserCRUD, PaymentRequestStatus, BillingNotificationCRUD
 
 logger = logging.getLogger(__name__)
 
@@ -200,29 +200,31 @@ async def on_proof_document(message: Message, state: FSMContext):
             await state.clear()
             return
 
-        # Обновляем сообщение у billing контакта
-        if payment_request.billing_message_id:
-            try:
-                new_text = format_payment_request_message(
-                    request_id=payment_request.id,
-                    title=payment_request.title,
-                    amount=payment_request.amount,
-                    comment=payment_request.comment,
-                    created_by_name=payment_request.created_by.display_name,
-                    status=payment_request.status,
-                    created_at=payment_request.created_at,
-                    paid_by_name=user.display_name,
-                    paid_at=payment_request.paid_at,
-                )
+        # Обновляем сообщения у ВСЕХ billing контактов
+        billing_notifications = await BillingNotificationCRUD.get_billing_notifications(session, payment_request.id)
 
+        new_text = format_payment_request_message(
+            request_id=payment_request.id,
+            title=payment_request.title,
+            amount=payment_request.amount,
+            comment=payment_request.comment,
+            created_by_name=payment_request.created_by.display_name,
+            status=payment_request.status,
+            created_at=payment_request.created_at,
+            paid_by_name=user.display_name,
+            paid_at=payment_request.paid_at,
+        )
+
+        for notification in billing_notifications:
+            try:
                 await message.bot.edit_message_text(
-                    chat_id=message.chat.id,
-                    message_id=payment_request.billing_message_id,
+                    chat_id=notification.chat_id,
+                    message_id=notification.message_id,
                     text=new_text,
                     reply_markup=get_payment_request_keyboard(payment_request.id, payment_request.status),
                 )
             except Exception as e:
-                logger.error(f"Error updating billing message: {e}")
+                logger.error(f"Error updating billing notification {notification.id}: {e}")
 
         # Обновляем сообщение Worker и отправляем платежку отдельно
         if payment_request.worker_message_id and payment_request.created_by.telegram_id:
@@ -331,28 +333,30 @@ async def on_payment_schedule_today(callback: CallbackQuery):
             await callback.answer("❌ Ошибка при обновлении запроса", show_alert=True)
             return
 
-        # Обновляем сообщение
-        if payment_request.billing_message_id:
-            try:
-                new_text = format_payment_request_message(
-                    request_id=payment_request.id,
-                    title=payment_request.title,
-                    amount=payment_request.amount,
-                    comment=payment_request.comment,
-                    created_by_name=payment_request.created_by.display_name,
-                    status=payment_request.status,
-                    created_at=payment_request.created_at,
-                    processing_by_name=user.display_name,
-                )
+        # Обновляем сообщения у ВСЕХ billing контактов
+        billing_notifications = await BillingNotificationCRUD.get_billing_notifications(session, payment_request.id)
 
+        new_text = format_payment_request_message(
+            request_id=payment_request.id,
+            title=payment_request.title,
+            amount=payment_request.amount,
+            comment=payment_request.comment,
+            created_by_name=payment_request.created_by.display_name,
+            status=payment_request.status,
+            created_at=payment_request.created_at,
+            processing_by_name=user.display_name,
+        )
+
+        for notification in billing_notifications:
+            try:
                 await callback.bot.edit_message_text(
-                    chat_id=callback.message.chat.id,
-                    message_id=payment_request.billing_message_id,
+                    chat_id=notification.chat_id,
+                    message_id=notification.message_id,
                     text=new_text,
                     reply_markup=get_payment_request_keyboard(payment_request.id, payment_request.status),
                 )
             except Exception as e:
-                logger.error(f"Error updating billing message: {e}")
+                logger.error(f"Error updating billing notification {notification.id}: {e}")
 
         # Обновляем сообщение Worker (вместо создания нового)
         if payment_request.worker_message_id and payment_request.created_by.telegram_id:
@@ -450,29 +454,31 @@ async def on_date_input(message: Message, state: FSMContext):
             await state.clear()
             return
 
-        # Обновляем сообщение у billing контакта
-        if payment_request.billing_message_id:
-            try:
-                new_text = format_payment_request_message(
-                    request_id=payment_request.id,
-                    title=payment_request.title,
-                    amount=payment_request.amount,
-                    comment=payment_request.comment,
-                    created_by_name=payment_request.created_by.display_name,
-                    status=payment_request.status,
-                    created_at=payment_request.created_at,
-                    processing_by_name=user.display_name,
-                    scheduled_date=scheduled_date,
-                )
+        # Обновляем сообщения у ВСЕХ billing контактов
+        billing_notifications = await BillingNotificationCRUD.get_billing_notifications(session, payment_request.id)
 
+        new_text = format_payment_request_message(
+            request_id=payment_request.id,
+            title=payment_request.title,
+            amount=payment_request.amount,
+            comment=payment_request.comment,
+            created_by_name=payment_request.created_by.display_name,
+            status=payment_request.status,
+            created_at=payment_request.created_at,
+            processing_by_name=user.display_name,
+            scheduled_date=scheduled_date,
+        )
+
+        for notification in billing_notifications:
+            try:
                 await message.bot.edit_message_text(
-                    chat_id=message.chat.id,
-                    message_id=payment_request.billing_message_id,
+                    chat_id=notification.chat_id,
+                    message_id=notification.message_id,
                     text=new_text,
                     reply_markup=get_payment_request_keyboard(payment_request.id, payment_request.status),
                 )
             except Exception as e:
-                logger.error(f"Error updating billing message: {e}")
+                logger.error(f"Error updating billing notification {notification.id}: {e}")
 
         # Обновляем сообщение Worker (вместо создания нового)
         if payment_request.worker_message_id and payment_request.created_by.telegram_id:
@@ -517,27 +523,29 @@ async def on_payment_cancel(callback: CallbackQuery):
             await callback.answer("❌ Ошибка при отмене запроса", show_alert=True)
             return
 
-        # Обновляем сообщение у billing контакта
-        if payment_request.billing_message_id:
-            try:
-                new_text = format_payment_request_message(
-                    request_id=payment_request.id,
-                    title=payment_request.title,
-                    amount=payment_request.amount,
-                    comment=payment_request.comment,
-                    created_by_name=payment_request.created_by.display_name,
-                    status=payment_request.status,
-                    created_at=payment_request.created_at,
-                )
+        # Обновляем сообщения у ВСЕХ billing контактов
+        billing_notifications = await BillingNotificationCRUD.get_billing_notifications(session, payment_request.id)
 
+        new_text = format_payment_request_message(
+            request_id=payment_request.id,
+            title=payment_request.title,
+            amount=payment_request.amount,
+            comment=payment_request.comment,
+            created_by_name=payment_request.created_by.display_name,
+            status=payment_request.status,
+            created_at=payment_request.created_at,
+        )
+
+        for notification in billing_notifications:
+            try:
                 await callback.bot.edit_message_text(
-                    chat_id=callback.message.chat.id,
-                    message_id=payment_request.billing_message_id,
+                    chat_id=notification.chat_id,
+                    message_id=notification.message_id,
                     text=new_text,
                     reply_markup=get_payment_request_keyboard(payment_request.id, payment_request.status),
                 )
             except Exception as e:
-                logger.error(f"Error updating billing message: {e}")
+                logger.error(f"Error updating billing notification {notification.id}: {e}")
 
         # Обновляем сообщение Worker (вместо создания нового)
         if payment_request.worker_message_id and payment_request.created_by.telegram_id:

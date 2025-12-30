@@ -3,7 +3,7 @@ from datetime import datetime, date
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from .models import User, UserSettings, UserRole, PaymentRequest, PaymentRequestStatus
+from .models import User, UserSettings, UserRole, PaymentRequest, PaymentRequestStatus, BillingNotification
 
 class UserCRUD:
     """CRUD операции для работы с пользователями"""
@@ -542,3 +542,82 @@ class PaymentRequestCRUD:
             request_id,
             billing_message_id=message_id,
         )
+
+
+class BillingNotificationCRUD:
+    """CRUD операции для работы с уведомлениями billing контактов"""
+
+    @staticmethod
+    async def create_billing_notification(
+        session: AsyncSession,
+        payment_request_id: int,
+        billing_user_id: int,
+        message_id: int,
+        chat_id: int,
+    ) -> BillingNotification:
+        """Создает уведомление для billing контакта
+
+        Args:
+            session: Сессия БД
+            payment_request_id: ID запроса на оплату
+            billing_user_id: ID billing контакта
+            message_id: Telegram message ID
+            chat_id: Telegram chat ID
+
+        Returns:
+            Созданное уведомление
+        """
+        notification = BillingNotification(
+            payment_request_id=payment_request_id,
+            billing_user_id=billing_user_id,
+            message_id=message_id,
+            chat_id=chat_id,
+        )
+        session.add(notification)
+        await session.commit()
+        await session.refresh(notification)
+        return notification
+
+    @staticmethod
+    async def get_billing_notifications(
+        session: AsyncSession,
+        payment_request_id: int,
+    ) -> List[BillingNotification]:
+        """Получает все уведомления для запроса на оплату
+
+        Args:
+            session: Сессия БД
+            payment_request_id: ID запроса на оплату
+
+        Returns:
+            Список уведомлений с загруженными billing_user
+        """
+        query = (
+            select(BillingNotification)
+            .options(selectinload(BillingNotification.billing_user))
+            .where(BillingNotification.payment_request_id == payment_request_id)
+        )
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def delete_billing_notifications(
+        session: AsyncSession,
+        payment_request_id: int,
+    ) -> bool:
+        """Удаляет все уведомления для запроса на оплату
+
+        Args:
+            session: Сессия БД
+            payment_request_id: ID запроса на оплату
+
+        Returns:
+            True если уведомления были удалены
+        """
+        notifications = await BillingNotificationCRUD.get_billing_notifications(session, payment_request_id)
+
+        for notification in notifications:
+            await session.delete(notification)
+
+        await session.commit()
+        return True

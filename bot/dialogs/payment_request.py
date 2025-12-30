@@ -10,7 +10,7 @@ from aiogram_dialog.widgets.text import Const, Format
 from aiogram_dialog.widgets.input import MessageInput
 
 from bot.states import PaymentRequestCreation, MainMenu
-from bot.database import get_session, PaymentRequestCRUD, UserCRUD
+from bot.database import get_session, PaymentRequestCRUD, UserCRUD, BillingNotificationCRUD
 from bot.handlers.payment_callbacks import format_payment_request_message, get_payment_request_keyboard
 
 logger = logging.getLogger(__name__)
@@ -236,47 +236,18 @@ async def on_send_request(callback: CallbackQuery, button: Button, manager: Dial
 
             keyboard = get_payment_request_keyboard(payment_request.id, payment_request.status)
 
-            # Отправляем уведомление первому billing контакту и сохраняем message_id
-            first_billing = billing_contacts[0]
-            if first_billing.telegram_id:
-                try:
-                    # Отправляем сообщение
-                    sent_message = await callback.bot.send_message(
-                        chat_id=first_billing.telegram_id,
-                        text=message_text,
-                        reply_markup=keyboard,
-                    )
-
-                    # Если есть счет, отправляем его
-                    if invoice_file_id:
-                        await callback.bot.send_document(
-                            chat_id=first_billing.telegram_id,
-                            document=invoice_file_id,
-                            caption=f"📎 Счет к запросу #{payment_request.id}",
-                        )
-
-                    # Сохраняем message_id
-                    await PaymentRequestCRUD.set_billing_message_id(
-                        session=session,
-                        request_id=payment_request.id,
-                        message_id=sent_message.message_id,
-                    )
-
-                    logger.info(f"Notification sent to billing contact {first_billing.telegram_username}")
-
-                except Exception as e:
-                    logger.error(f"Error sending notification to billing contact: {e}", exc_info=True)
-
-            # Уведомляем остальных billing контактов (без сохранения message_id)
-            for billing_contact in billing_contacts[1:]:
+            # Отправляем уведомление ВСЕМ billing контактам и сохраняем message_id для каждого
+            for billing_contact in billing_contacts:
                 if billing_contact.telegram_id:
                     try:
-                        await callback.bot.send_message(
+                        # Отправляем сообщение
+                        sent_message = await callback.bot.send_message(
                             chat_id=billing_contact.telegram_id,
                             text=message_text,
                             reply_markup=keyboard,
                         )
 
+                        # Если есть счет, отправляем его
                         if invoice_file_id:
                             await callback.bot.send_document(
                                 chat_id=billing_contact.telegram_id,
@@ -284,10 +255,19 @@ async def on_send_request(callback: CallbackQuery, button: Button, manager: Dial
                                 caption=f"📎 Счет к запросу #{payment_request.id}",
                             )
 
+                        # Сохраняем уведомление в базу
+                        await BillingNotificationCRUD.create_billing_notification(
+                            session=session,
+                            payment_request_id=payment_request.id,
+                            billing_user_id=billing_contact.id,
+                            message_id=sent_message.message_id,
+                            chat_id=billing_contact.telegram_id,
+                        )
+
                         logger.info(f"Notification sent to billing contact {billing_contact.telegram_username}")
 
                     except Exception as e:
-                        logger.error(f"Error sending notification to {billing_contact.telegram_username}: {e}")
+                        logger.error(f"Error sending notification to {billing_contact.telegram_username}: {e}", exc_info=True)
 
             # Сохраняем ID текущего сообщения диалога как worker_message_id
             # (это сообщение будет обновляться при изменении статуса)

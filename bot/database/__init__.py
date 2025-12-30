@@ -1,6 +1,6 @@
-from .models import User, UserSettings, UserRole, PaymentRequest, PaymentRequestStatus
+from .models import User, UserSettings, UserRole, PaymentRequest, PaymentRequestStatus, BillingNotification
 from .database import init_db, init_default_owners, get_session
-from .crud import UserCRUD, PaymentRequestCRUD
+from .crud import UserCRUD, PaymentRequestCRUD, BillingNotificationCRUD
 
 __all__ = [
     "User",
@@ -8,9 +8,11 @@ __all__ = [
     "UserRole",
     "PaymentRequest",
     "PaymentRequestStatus",
+    "BillingNotification",
     "init_db",
     "init_default_owners",
     "get_session",
     "UserCRUD",
     "PaymentRequestCRUD",
+    "BillingNotificationCRUD",
 ]

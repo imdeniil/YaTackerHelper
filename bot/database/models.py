@@ -131,6 +131,38 @@ class PaymentRequest(Base):
     created_by = relationship("User", foreign_keys=[created_by_id], back_populates="created_payment_requests")
     processing_by = relationship("User", foreign_keys=[processing_by_id], back_populates="processing_payment_requests")
     paid_by = relationship("User", foreign_keys=[paid_by_id], back_populates="paid_payment_requests")
+    billing_notifications = relationship("BillingNotification", back_populates="payment_request", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<PaymentRequest(id={self.id}, title={self.title}, amount={self.amount}, status={self.status.value})>"
+
+
+class BillingNotification(Base):
+    """Уведомления billing контактов о запросах на оплату
+
+    Сохраняет message_id для каждого billing контакта,
+    чтобы можно было обновлять сообщения при изменении статуса.
+
+    Attributes:
+        id: Внутренний ID уведомления
+        payment_request_id: FK к запросу на оплату
+        billing_user_id: FK к billing контакту
+        message_id: ID сообщения в Telegram
+        chat_id: ID чата в Telegram (обычно совпадает с telegram_id пользователя)
+        created_at: Дата создания уведомления
+    """
+    __tablename__ = "billing_notifications"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    payment_request_id = Column(Integer, ForeignKey("payment_requests.id", ondelete="CASCADE"), nullable=False, index=True)
+    billing_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    message_id = Column(BigInteger, nullable=False)
+    chat_id = Column(BigInteger, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    payment_request = relationship("PaymentRequest", back_populates="billing_notifications")
+    billing_user = relationship("User")
+
+    def __repr__(self):
+        return f"<BillingNotification(id={self.id}, request_id={self.payment_request_id}, user_id={self.billing_user_id}, message_id={self.message_id})>"
