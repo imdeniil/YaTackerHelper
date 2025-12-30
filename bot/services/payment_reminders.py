@@ -21,7 +21,7 @@ async def send_reminder_scheduled_today(bot: Bot):
     async with get_session() as session:
         # Получаем все запросы со статусом SCHEDULED_TODAY
         requests = await PaymentRequestCRUD.get_all_payment_requests(
-            session, status=PaymentRequestStatus.SCHEDULED_TODAY
+            session, status=PaymentRequestStatus.SCHEDULED_TODAY.value
         )
 
         if not requests:
@@ -89,7 +89,7 @@ async def send_reminder_scheduled_date(bot: Bot):
     async with get_session() as session:
         # Получаем все запросы со статусом SCHEDULED_DATE
         all_scheduled = await PaymentRequestCRUD.get_all_payment_requests(
-            session, status=PaymentRequestStatus.SCHEDULED_DATE
+            session, status=PaymentRequestStatus.SCHEDULED_DATE.value
         )
 
         if not all_scheduled:
@@ -163,7 +163,7 @@ async def rollover_scheduled_today(bot: Bot):
     async with get_session() as session:
         # Получаем все запросы со статусом SCHEDULED_TODAY
         requests = await PaymentRequestCRUD.get_all_payment_requests(
-            session, status=PaymentRequestStatus.SCHEDULED_TODAY
+            session, status=PaymentRequestStatus.SCHEDULED_TODAY.value
         )
 
         if not requests:

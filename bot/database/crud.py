@@ -291,7 +291,7 @@ class PaymentRequestCRUD:
             amount=amount,
             comment=comment,
             invoice_file_id=invoice_file_id,
-            status=PaymentRequestStatus.PENDING,
+            status=PaymentRequestStatus.PENDING.value,
         )
         session.add(payment_request)
         await session.commit()
@@ -439,7 +439,7 @@ class PaymentRequestCRUD:
         return await PaymentRequestCRUD.update_payment_request(
             session,
             request_id,
-            status=PaymentRequestStatus.CANCELLED,
+            status=PaymentRequestStatus.CANCELLED.value,
         )
 
     @staticmethod
@@ -463,7 +463,7 @@ class PaymentRequestCRUD:
         return await PaymentRequestCRUD.update_payment_request(
             session,
             request_id,
-            status=PaymentRequestStatus.PAID,
+            status=PaymentRequestStatus.PAID.value,
             paid_by_id=paid_by_id,
             paid_at=datetime.utcnow(),
             payment_proof_file_id=payment_proof_file_id,
@@ -489,7 +489,7 @@ class PaymentRequestCRUD:
         Returns:
             Обновленный запрос или None
         """
-        status = PaymentRequestStatus.SCHEDULED_TODAY if is_today else PaymentRequestStatus.SCHEDULED_DATE
+        status = PaymentRequestStatus.SCHEDULED_TODAY.value if is_today else PaymentRequestStatus.SCHEDULED_DATE.value
 
         return await PaymentRequestCRUD.update_payment_request(
             session,
