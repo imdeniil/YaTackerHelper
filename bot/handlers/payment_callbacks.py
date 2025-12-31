@@ -234,10 +234,10 @@ async def on_proof_document(message: Message, state: FSMContext):
             except Exception as e:
                 logger.error(f"Error updating billing notification {notification.id}: {e}")
 
-        # Обновляем сообщение Worker и отправляем платежку отдельно
-        if payment_request.worker_message_id and payment_request.created_by.telegram_id:
+        # Отправляем НОВОЕ уведомление Worker'у и платежку
+        if payment_request.created_by.telegram_id:
             try:
-                # Обновляем основное сообщение Worker
+                # Формируем текст уведомления
                 worker_text = format_payment_request_message(
                     request_id=payment_request.id,
                     title=payment_request.title,
@@ -251,15 +251,15 @@ async def on_proof_document(message: Message, state: FSMContext):
                 )
                 worker_text += "\n\n📎 Платежка отправлена отдельным сообщением ⬇️"
 
-                await message.bot.edit_message_text(
+                # Отправляем НОВОЕ уведомление
+                await message.bot.send_message(
                     chat_id=payment_request.created_by.telegram_id,
-                    message_id=payment_request.worker_message_id,
                     text=worker_text,
                 )
 
-                # Отправляем платежку отдельным документом
+                # Отправляем платежку отдельным документом с кнопкой "Главное меню"
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🗑 Скрыть документ", callback_data="hide_document")]
+                    [InlineKeyboardButton(text="🏠 Главное меню", callback_data="worker_payment_goto_main_menu")]
                 ])
 
                 await message.bot.send_document(
@@ -615,6 +615,29 @@ async def on_cancel_goto_main_menu(callback: CallbackQuery, dialog_manager: Dial
         )
     except Exception as e:
         logger.error(f"Error removing button: {e}")
+
+    await callback.answer()
+
+    # Закрываем текущий диалог если есть
+    if dialog_manager.has_context():
+        await dialog_manager.done()
+
+    # Запускаем главное меню
+    await dialog_manager.start(MainMenu.main, mode=StartMode.RESET_STACK)
+
+
+@payment_callbacks_router.callback_query(F.data == "worker_payment_goto_main_menu")
+async def on_worker_payment_goto_main_menu(callback: CallbackQuery, dialog_manager: DialogManager):
+    """Обработчик кнопки 'Главное меню' на документе платежки для Worker'а"""
+    # Удаляем кнопку из сообщения с документом
+    try:
+        await callback.bot.edit_message_reply_markup(
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id,
+            reply_markup=None
+        )
+    except Exception as e:
+        logger.error(f"Error removing button from payment document: {e}")
 
     await callback.answer()
 
