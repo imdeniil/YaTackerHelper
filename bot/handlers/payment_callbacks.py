@@ -641,25 +641,23 @@ async def on_worker_payment_goto_main_menu(callback: CallbackQuery, dialog_manag
 
     await callback.answer()
 
-    # Полностью сбрасываем все диалоги через bg_manager
+    # ПОЛНОСТЬЮ сбрасываем весь стек диалогов
+    try:
+        await dialog_manager.reset_stack()
+    except Exception as e:
+        logger.debug(f"Error resetting stack: {e}")
+
+    # Получаем bg_manager и запускаем главное меню
     bg = dialog_manager.bg()
 
-    # Закрываем ВСЕ активные диалоги для этого пользователя
-    try:
-        # Пытаемся получить текущий стек и очистить его
-        if dialog_manager.has_context():
-            # Получаем весь стек
-            while dialog_manager.has_context():
-                await dialog_manager.done()
-    except Exception as e:
-        logger.debug(f"Error closing dialogs: {e}")
-
-    # Запускаем главное меню через bg_manager (это гарантирует новое сообщение)
+    # Запускаем главное меню через bg_manager с RESET_STACK
+    # Это должно гарантировать отправку нового сообщения
     await bg.start(
         MainMenu.main,
         user_id=callback.from_user.id,
         chat_id=callback.message.chat.id,
-        mode=StartMode.RESET_STACK
+        mode=StartMode.RESET_STACK,
+        show_mode=ShowMode.SEND  # Явно указываем отправить новое сообщение
     )
 
 
