@@ -645,8 +645,8 @@ async def on_worker_payment_goto_main_menu(callback: CallbackQuery, dialog_manag
     if dialog_manager.has_context():
         await dialog_manager.done()
 
-    # Запускаем главное меню
-    await dialog_manager.start(MainMenu.main, mode=StartMode.RESET_STACK)
+    # Запускаем главное меню в НОВОМ сообщении
+    await dialog_manager.start(MainMenu.main, mode=StartMode.NEW_STACK)
 
 
 @payment_callbacks_router.message(CancelWithComment.waiting_for_comment)
