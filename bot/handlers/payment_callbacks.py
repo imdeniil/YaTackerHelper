@@ -647,8 +647,12 @@ async def on_worker_payment_goto_main_menu(callback: CallbackQuery, dialog_manag
     except Exception as e:
         logger.debug(f"Error resetting stack: {e}")
 
-    # Отправляем простое сообщение и запускаем на нем диалог
-    sent_message = await callback.message.answer("Загрузка главного меню...")
+    # Отправляем НОВОЕ сообщение напрямую через bot (не через message.answer)
+    # Это гарантирует что сообщение не связано с callback'ом
+    sent_message = await callback.bot.send_message(
+        chat_id=callback.message.chat.id,
+        text="Загрузка главного меню..."
+    )
 
     # Импортируем cmd_start из commands
     from bot.handlers.commands import cmd_start
