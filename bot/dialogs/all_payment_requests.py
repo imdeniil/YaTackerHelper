@@ -238,16 +238,23 @@ async def on_pay_early(callback: CallbackQuery, button: Button, manager: DialogM
 
     # Сохраняем request_id в FSM state
     await state.set_state(UploadProof.waiting_for_document)
-    await state.update_data(request_id=request_id)
 
     # Закрываем диалог
     await manager.done()
 
-    # Отправляем инструкцию
-    await callback.message.answer(
+    # Отправляем инструкцию с кнопкой отмены
+    sent_message = await callback.message.answer(
         "📎 <b>Досрочная оплата запроса</b>\n\n"
-        "Пожалуйста, отправьте документ с платежкой (скриншот или PDF).\n\n"
-        "Для отмены отправьте /cancel"
+        "Пожалуйста, отправьте документ с платежкой (скриншот или PDF).",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🚫 Отменить действие", callback_data=f"cancel_action:{request_id}")]
+        ])
+    )
+
+    # Сохраняем message_id для возможного редактирования
+    await state.update_data(
+        request_id=request_id,
+        upload_proof_message_id=sent_message.message_id
     )
     await callback.answer()
 
@@ -329,16 +336,23 @@ async def on_pay_now(callback: CallbackQuery, button: Button, manager: DialogMan
 
     # Сохраняем request_id в FSM state для последующей обработки
     await state.set_state(UploadProof.waiting_for_document)
-    await state.update_data(request_id=request_id)
 
     # Закрываем диалог
     await manager.done()
 
-    # Отправляем инструкцию
-    await callback.message.answer(
+    # Отправляем инструкцию с кнопкой отмены
+    sent_message = await callback.message.answer(
         "📎 <b>Оплата запроса</b>\n\n"
-        "Пожалуйста, отправьте документ с платежкой (скриншот или PDF).\n\n"
-        "Для отмены отправьте /cancel"
+        "Пожалуйста, отправьте документ с платежкой (скриншот или PDF).",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🚫 Отменить действие", callback_data=f"cancel_action:{request_id}")]
+        ])
+    )
+
+    # Сохраняем message_id для возможного редактирования
+    await state.update_data(
+        request_id=request_id,
+        upload_proof_message_id=sent_message.message_id
     )
     await callback.answer()
 
