@@ -34,15 +34,16 @@ async def handle_unknown_intent(event: ErrorEvent):
     logger.warning(f"UnknownIntent error for user {callback.from_user.id}: {event.exception}")
 
     try:
-        # Редактируем сообщение и добавляем кнопку главного меню
+        # Редактируем сообщение и добавляем кнопки
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🏠 Главное меню", callback_data="expired_goto_main_menu")]
+            [InlineKeyboardButton(text="🏠 Главное меню", callback_data="expired_goto_main_menu")],
+            [InlineKeyboardButton(text="🗑 Скрыть сообщение", callback_data="expired_hide_message")]
         ])
 
         await callback.message.edit_text(
             text=(
                 "⚠️ <b>Это окно устарело</b>\n\n"
-                "Нажмите кнопку ниже для возврата в главное меню."
+                "Выберите действие:"
             ),
             reply_markup=keyboard
         )
@@ -85,3 +86,14 @@ async def expired_goto_main_menu(callback: CallbackQuery, dialog_manager: Dialog
 
     # Запускаем главное меню
     await dialog_manager.start(MainMenu.main, mode=StartMode.RESET_STACK)
+
+
+@unknown_intent_router.callback_query(F.data == "expired_hide_message")
+async def expired_hide_message(callback: CallbackQuery):
+    """Обработчик кнопки 'Скрыть сообщение' из устаревшего сообщения"""
+    try:
+        await callback.message.delete()
+        await callback.answer("Сообщение скрыто")
+    except Exception as e:
+        logger.error(f"Error hiding expired message: {e}")
+        await callback.answer("Не удалось скрыть сообщение")
