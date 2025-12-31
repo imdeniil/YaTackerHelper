@@ -627,7 +627,7 @@ async def on_cancel_goto_main_menu(callback: CallbackQuery, dialog_manager: Dial
 
 
 @payment_callbacks_router.callback_query(F.data == "worker_payment_goto_main_menu")
-async def on_worker_payment_goto_main_menu(callback: CallbackQuery, dialog_manager: DialogManager):
+async def on_worker_payment_goto_main_menu(callback: CallbackQuery):
     """Обработчик кнопки 'Главное меню' на документе платежки для Worker'а"""
     # Удаляем кнопку из сообщения с документом
     try:
@@ -639,14 +639,8 @@ async def on_worker_payment_goto_main_menu(callback: CallbackQuery, dialog_manag
     except Exception as e:
         logger.error(f"Error removing button from payment document: {e}")
 
-    await callback.answer()
-
-    # Закрываем текущий диалог если есть
-    if dialog_manager.has_context():
-        await dialog_manager.done()
-
-    # Запускаем главное меню в НОВОМ сообщении
-    await dialog_manager.start(MainMenu.main, mode=StartMode.NEW_STACK)
+    # Отправляем уведомление пользователю
+    await callback.answer("Для открытия главного меню используйте /start")
 
 
 @payment_callbacks_router.message(CancelWithComment.waiting_for_comment)
