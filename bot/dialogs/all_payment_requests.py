@@ -10,7 +10,7 @@ from aiogram_dialog.widgets.text import Const, Format
 
 from bot.states import AllPaymentRequests
 from bot.database import get_session, PaymentRequestCRUD, PaymentRequestStatus
-from bot.handlers.payment_callbacks import UploadProof
+from bot.handlers.payment_callbacks import UploadProof, CancelWithComment
 
 logger = logging.getLogger(__name__)
 
@@ -250,6 +250,55 @@ async def on_pay_early(callback: CallbackQuery, button: Button, manager: DialogM
     await callback.answer()
 
 
+async def on_cancel_early(callback: CallbackQuery, button: Button, manager: DialogManager):
+    """Обработчик досрочной отмены запроса"""
+    request_id = manager.dialog_data.get("selected_request_id")
+
+    if not request_id:
+        await callback.answer("❌ Ошибка: ID запроса не найден", show_alert=True)
+        return
+
+    async with get_session() as session:
+        payment_request = await PaymentRequestCRUD.get_payment_request_by_id(session, request_id)
+
+        if not payment_request:
+            await callback.answer("❌ Запрос не найден", show_alert=True)
+            return
+
+        # Проверяем что запрос еще можно отменить
+        if payment_request.status in [PaymentRequestStatus.PAID, PaymentRequestStatus.CANCELLED]:
+            await callback.answer("❌ Запрос уже обработан", show_alert=True)
+            return
+
+    # Получаем FSM context из event
+    state: FSMContext = manager.middleware_data.get("state")
+    if not state:
+        await callback.answer("❌ Ошибка: не удалось получить FSM context", show_alert=True)
+        return
+
+    # Сохраняем request_id в FSM state и запрашиваем комментарий
+    await state.set_state(CancelWithComment.waiting_for_comment)
+
+    # Закрываем диалог
+    await manager.done()
+
+    # Отправляем сообщение с запросом комментария и сохраняем его message_id
+    sent_message = await callback.message.answer(
+        f"❌ <b>Отмена запроса на оплату #{request_id}</b>\n\n"
+        f"Пожалуйста, укажите причину отмены.\n"
+        f"Этот комментарий увидит Worker.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🚫 Отменить действие", callback_data=f"cancel_action:{request_id}")]
+        ])
+    )
+
+    await state.update_data(
+        request_id=request_id,
+        cancel_request_message_id=sent_message.message_id
+    )
+    await callback.answer()
+
+
 async def on_back_to_all_list(callback: CallbackQuery, button: Button, manager: DialogManager):
     """Возврат к списку всех запросов"""
     manager.show_mode = ShowMode.EDIT
@@ -345,9 +394,15 @@ all_details_window = Window(
         on_click=on_pay_early,
         when="can_pay_early",
     ),
+    Button(
+        Const("❌ Отменить запрос"),
+        id="cancel_early",
+        on_click=on_cancel_early,
+        when="can_cancel",
+    ),
     Const(
-        "\n💡 <i>Для других действий используйте inline кнопки в уведомлениях</i>",
-        when=lambda data, widget, manager: (data.get("can_schedule") or data.get("can_cancel")) and not data.get("can_pay_early"),
+        "\n💡 <i>Для планирования используйте inline кнопки в уведомлениях</i>",
+        when=lambda data, widget, manager: data.get("can_schedule") and not data.get("can_pay_early") and not data.get("can_cancel"),
     ),
     Button(
         Const("⬅️ Назад к списку"),
