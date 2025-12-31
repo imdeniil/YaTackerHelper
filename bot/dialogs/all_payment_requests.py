@@ -2,7 +2,7 @@
 
 import logging
 from typing import Any
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram_dialog import Dialog, Window, DialogManager, ShowMode
 from aiogram_dialog.widgets.kbd import Button, Cancel, ScrollingGroup, Select, Row
 from aiogram_dialog.widgets.text import Const, Format
@@ -162,10 +162,15 @@ async def on_download_invoice_billing(callback: CallbackQuery, button: Button, m
 
     if data.get("has_invoice") and data.get("invoice_file_id"):
         try:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🗑 Скрыть документ", callback_data="hide_document")]
+            ])
+
             await callback.bot.send_document(
                 chat_id=callback.from_user.id,
                 document=data["invoice_file_id"],
                 caption=f"📎 Счет к запросу #{data['id']}",
+                reply_markup=keyboard,
             )
             await callback.answer("Счет отправлен")
         except Exception as e:
@@ -181,10 +186,15 @@ async def on_download_proof_billing(callback: CallbackQuery, button: Button, man
 
     if data.get("has_payment_proof") and data.get("payment_proof_file_id"):
         try:
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🗑 Скрыть документ", callback_data="hide_document")]
+            ])
+
             await callback.bot.send_document(
                 chat_id=callback.from_user.id,
                 document=data["payment_proof_file_id"],
                 caption=f"📎 Платежка к запросу #{data['id']}",
+                reply_markup=keyboard,
             )
             await callback.answer("Платежка отправлена")
         except Exception as e:

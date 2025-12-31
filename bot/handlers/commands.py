@@ -114,3 +114,20 @@ async def goto_main_menu(callback: CallbackQuery, dialog_manager: DialogManager)
 
     # Запускаем главное меню
     await dialog_manager.start(MainMenu.main, mode=StartMode.RESET_STACK)
+
+
+@router.callback_query(F.data == "hide_document")
+async def hide_document(callback: CallbackQuery):
+    """
+    Обработчик кнопки скрытия документа.
+    Удаляет сообщение с документом из чата.
+
+    Args:
+        callback: Callback от кнопки
+    """
+    try:
+        await callback.message.delete()
+        await callback.answer("Документ скрыт")
+    except Exception as e:
+        logger.error(f"Error hiding document: {e}")
+        await callback.answer("Не удалось скрыть документ")

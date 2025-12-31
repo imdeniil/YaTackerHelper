@@ -257,10 +257,15 @@ async def on_proof_document(message: Message, state: FSMContext):
                 )
 
                 # Отправляем платежку отдельным документом
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🗑 Скрыть документ", callback_data="hide_document")]
+                ])
+
                 await message.bot.send_document(
                     chat_id=payment_request.created_by.telegram_id,
                     document=payment_proof_file_id,
                     caption=f"📎 Платежка к запросу #{payment_request.id}",
+                    reply_markup=keyboard,
                 )
             except Exception as e:
                 logger.error(f"Error notifying worker: {e}")
@@ -677,7 +682,7 @@ async def on_cancel_comment_received(message: Message, state: FSMContext, **kwar
                 confirmation_text = (
                     f"✅ <b>Запрос #{request_id} отменен</b>\n\n"
                     f"<b>Причина отмены:</b> {cancel_comment}\n\n"
-                    f"Worker получил уведомление с причиной отмены."
+                    f"Сотрудник получил уведомление с причиной отмены."
                 )
 
                 # Добавляем кнопку "Главное меню"
