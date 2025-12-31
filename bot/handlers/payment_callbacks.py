@@ -6,7 +6,7 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram_dialog import DialogManager, StartMode
+from aiogram_dialog import DialogManager, StartMode, ShowMode
 
 from bot.database import get_session, PaymentRequestCRUD, UserCRUD, PaymentRequestStatus, BillingNotificationCRUD
 from bot.states import MainMenu
@@ -627,7 +627,7 @@ async def on_cancel_goto_main_menu(callback: CallbackQuery, dialog_manager: Dial
 
 
 @payment_callbacks_router.callback_query(F.data == "worker_payment_goto_main_menu")
-async def on_worker_payment_goto_main_menu(callback: CallbackQuery):
+async def on_worker_payment_goto_main_menu(callback: CallbackQuery, dialog_manager: DialogManager):
     """Обработчик кнопки 'Главное меню' на документе платежки для Worker'а"""
     # Удаляем кнопку из сообщения с документом
     try:
@@ -639,8 +639,18 @@ async def on_worker_payment_goto_main_menu(callback: CallbackQuery):
     except Exception as e:
         logger.error(f"Error removing button from payment document: {e}")
 
-    # Отправляем уведомление пользователю
-    await callback.answer("Для открытия главного меню используйте /start")
+    await callback.answer()
+
+    # Закрываем все текущие диалоги
+    if dialog_manager.has_context():
+        await dialog_manager.done()
+
+    # Запускаем главное меню с явным указанием ОТПРАВИТЬ новое сообщение
+    await dialog_manager.start(
+        MainMenu.main,
+        mode=StartMode.RESET_STACK,
+        show_mode=ShowMode.SEND  # ← Ключевой параметр: отправить НОВОЕ сообщение
+    )
 
 
 @payment_callbacks_router.message(CancelWithComment.waiting_for_comment)
