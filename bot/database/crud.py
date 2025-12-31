@@ -448,6 +448,7 @@ class PaymentRequestCRUD:
         request_id: int,
         paid_by_id: int,
         payment_proof_file_id: str,
+        processing_by_id: Optional[int] = None,
     ) -> Optional[PaymentRequest]:
         """Отмечает запрос как оплаченный
 
@@ -456,17 +457,26 @@ class PaymentRequestCRUD:
             request_id: ID запроса
             paid_by_id: ID пользователя который оплатил
             payment_proof_file_id: Telegram file_id платежки
+            processing_by_id: ID пользователя который взял в работу (опционально)
 
         Returns:
             Обновленный запрос или None
         """
+        update_data = {
+            "status": PaymentRequestStatus.PAID.value,
+            "paid_by_id": paid_by_id,
+            "paid_at": datetime.utcnow(),
+            "payment_proof_file_id": payment_proof_file_id,
+        }
+
+        # Устанавливаем processing_by только если он был передан
+        if processing_by_id is not None:
+            update_data["processing_by_id"] = processing_by_id
+
         return await PaymentRequestCRUD.update_payment_request(
             session,
             request_id,
-            status=PaymentRequestStatus.PAID.value,
-            paid_by_id=paid_by_id,
-            paid_at=datetime.utcnow(),
-            payment_proof_file_id=payment_proof_file_id,
+            **update_data,
         )
 
     @staticmethod

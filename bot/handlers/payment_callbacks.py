@@ -200,6 +200,7 @@ async def on_proof_document(message: Message, state: FSMContext):
             request_id=request_id,
             paid_by_id=user.id,
             payment_proof_file_id=payment_proof_file_id,
+            processing_by_id=user.id,  # Устанавливаем кто взял в работу
         )
 
         if not payment_request:

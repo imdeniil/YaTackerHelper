@@ -61,6 +61,7 @@ class AllPaymentRequests(StatesGroup):
 
     list = State()  # Список запросов
     view_details = State()  # Детали конкретного запроса
+    schedule_date = State()  # Выбор даты для планирования оплаты
 
 
 class PaymentProcessing(StatesGroup):
