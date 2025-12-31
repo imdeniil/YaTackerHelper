@@ -4,6 +4,9 @@ import logging
 from aiogram import Router, F
 from aiogram.types import ErrorEvent, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram_dialog.api.exceptions import UnknownIntent
+from aiogram_dialog import DialogManager, StartMode
+
+from bot.states import MainMenu
 
 logger = logging.getLogger(__name__)
 
@@ -31,15 +34,15 @@ async def handle_unknown_intent(event: ErrorEvent):
     logger.warning(f"UnknownIntent error for user {callback.from_user.id}: {event.exception}")
 
     try:
-        # Редактируем сообщение и добавляем кнопку удаления
+        # Редактируем сообщение и добавляем кнопку главного меню
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🗑 Удалить", callback_data="delete_expired_message")]
+            [InlineKeyboardButton(text="🏠 Главное меню", callback_data="expired_goto_main_menu")]
         ])
 
         await callback.message.edit_text(
             text=(
                 "⚠️ <b>Это окно устарело</b>\n\n"
-                "Используйте команду /start для возврата в главное меню."
+                "Нажмите кнопку ниже для возврата в главное меню."
             ),
             reply_markup=keyboard
         )
@@ -65,12 +68,20 @@ async def handle_unknown_intent(event: ErrorEvent):
     return True
 
 
-@unknown_intent_router.callback_query(F.data == "delete_expired_message")
-async def delete_expired_message(callback: CallbackQuery):
-    """Обработчик кнопки удаления устаревшего сообщения"""
+@unknown_intent_router.callback_query(F.data == "expired_goto_main_menu")
+async def expired_goto_main_menu(callback: CallbackQuery, dialog_manager: DialogManager):
+    """Обработчик кнопки 'Главное меню' из устаревшего сообщения"""
+    # Удаляем устаревшее сообщение
     try:
         await callback.message.delete()
-        await callback.answer("Сообщение удалено")
     except Exception as e:
-        logger.error(f"Error deleting expired message: {e}")
-        await callback.answer("Не удалось удалить сообщение")
+        logger.debug(f"Could not delete expired message: {e}")
+
+    await callback.answer()
+
+    # Закрываем текущий диалог если есть
+    if dialog_manager.has_context():
+        await dialog_manager.done()
+
+    # Запускаем главное меню
+    await dialog_manager.start(MainMenu.main, mode=StartMode.RESET_STACK)
