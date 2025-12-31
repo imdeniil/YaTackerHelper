@@ -236,25 +236,26 @@ async def on_pay_early(callback: CallbackQuery, button: Button, manager: DialogM
         await callback.answer("❌ Ошибка: не удалось получить FSM context", show_alert=True)
         return
 
+    # Сохраняем message_id текущего диалогового сообщения
+    dialog_message_id = callback.message.message_id
+
     # Сохраняем request_id в FSM state
     await state.set_state(UploadProof.waiting_for_document)
+    await state.update_data(
+        request_id=request_id,
+        upload_proof_message_id=dialog_message_id
+    )
 
     # Закрываем диалог
     await manager.done()
 
-    # Отправляем инструкцию с кнопкой отмены
-    sent_message = await callback.message.answer(
+    # Редактируем ТО ЖЕ сообщение (не отправляем новое)
+    await callback.message.edit_text(
         "📎 <b>Досрочная оплата запроса</b>\n\n"
         "Пожалуйста, отправьте документ с платежкой (скриншот или PDF).",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🚫 Отменить действие", callback_data=f"cancel_action:{request_id}")]
         ])
-    )
-
-    # Сохраняем message_id для возможного редактирования
-    await state.update_data(
-        request_id=request_id,
-        upload_proof_message_id=sent_message.message_id
     )
     await callback.answer()
 
@@ -334,25 +335,26 @@ async def on_pay_now(callback: CallbackQuery, button: Button, manager: DialogMan
         await callback.answer("❌ Ошибка: не удалось получить FSM context", show_alert=True)
         return
 
+    # Сохраняем message_id текущего диалогового сообщения
+    dialog_message_id = callback.message.message_id
+
     # Сохраняем request_id в FSM state для последующей обработки
     await state.set_state(UploadProof.waiting_for_document)
+    await state.update_data(
+        request_id=request_id,
+        upload_proof_message_id=dialog_message_id
+    )
 
     # Закрываем диалог
     await manager.done()
 
-    # Отправляем инструкцию с кнопкой отмены
-    sent_message = await callback.message.answer(
+    # Редактируем ТО ЖЕ сообщение (не отправляем новое)
+    await callback.message.edit_text(
         "📎 <b>Оплата запроса</b>\n\n"
         "Пожалуйста, отправьте документ с платежкой (скриншот или PDF).",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🚫 Отменить действие", callback_data=f"cancel_action:{request_id}")]
         ])
-    )
-
-    # Сохраняем message_id для возможного редактирования
-    await state.update_data(
-        request_id=request_id,
-        upload_proof_message_id=sent_message.message_id
     )
     await callback.answer()
 
