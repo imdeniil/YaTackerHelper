@@ -271,10 +271,36 @@ async def on_proof_document(message: Message, state: FSMContext):
             except Exception as e:
                 logger.error(f"Error notifying worker: {e}")
 
-        await message.answer(
-            f"✅ Запрос #{request_id} отмечен как оплаченный!\n"
-            f"Worker получит уведомление и платежку."
-        )
+        # Редактируем сообщение с запросом документа
+        upload_proof_message_id = data.get("upload_proof_message_id")
+        if upload_proof_message_id:
+            try:
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🏠 Главное меню", callback_data="goto_main_menu")]
+                ])
+
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=upload_proof_message_id,
+                    text=(
+                        f"✅ Запрос #{request_id} отмечен как оплаченный!\n"
+                        f"Worker получит уведомление и платежку."
+                    ),
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logger.error(f"Error editing upload proof message: {e}")
+                # Если не удалось отредактировать - отправляем новое
+                await message.answer(
+                    f"✅ Запрос #{request_id} отмечен как оплаченный!\n"
+                    f"Worker получит уведомление и платежку."
+                )
+        else:
+            # Fallback если message_id не был сохранен
+            await message.answer(
+                f"✅ Запрос #{request_id} отмечен как оплаченный!\n"
+                f"Worker получит уведомление и платежку."
+            )
 
     await state.clear()
 
