@@ -647,18 +647,27 @@ async def on_worker_payment_goto_main_menu(callback: CallbackQuery, dialog_manag
     except Exception as e:
         logger.debug(f"Error resetting stack: {e}")
 
-    # Отправляем НОВОЕ сообщение напрямую через bot (не через message.answer)
-    # Это гарантирует что сообщение не связано с callback'ом
-    sent_message = await callback.bot.send_message(
+    # Отправляем сообщение с НОВОЙ кнопкой которая откроет главное меню
+    # Это разорвет связь с текущим callback'ом
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🏠 Открыть главное меню", callback_data="open_main_menu_fresh")]
+    ])
+
+    await callback.bot.send_message(
         chat_id=callback.message.chat.id,
-        text="Загрузка главного меню..."
+        text="Нажмите кнопку ниже для открытия главного меню:",
+        reply_markup=keyboard
     )
 
-    # Импортируем cmd_start из commands
-    from bot.handlers.commands import cmd_start
 
-    # Вызываем обработчик /start напрямую с отправленным сообщением
-    await cmd_start(sent_message, dialog_manager)
+@payment_callbacks_router.callback_query(F.data == "open_main_menu_fresh")
+async def on_open_main_menu_fresh(callback: CallbackQuery, dialog_manager: DialogManager):
+    """Обработчик кнопки открытия главного меню (новый callback, не связан с документом)"""
+    await callback.answer()
+
+    # Этот dialog_manager уже привязан к НОВОМУ сообщению с кнопкой
+    # Поэтому должен редактировать его, а не документ
+    await dialog_manager.start(MainMenu.main, mode=StartMode.RESET_STACK)
 
 
 @payment_callbacks_router.message(CancelWithComment.waiting_for_comment)
