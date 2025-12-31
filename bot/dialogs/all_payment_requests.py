@@ -2,13 +2,15 @@
 
 import logging
 from typing import Any
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, Message
+from aiogram.fsm.context import FSMContext
 from aiogram_dialog import Dialog, Window, DialogManager, ShowMode
 from aiogram_dialog.widgets.kbd import Button, Cancel, ScrollingGroup, Select, Row
 from aiogram_dialog.widgets.text import Const, Format
 
 from bot.states import AllPaymentRequests
 from bot.database import get_session, PaymentRequestCRUD, PaymentRequestStatus
+from bot.handlers.payment_callbacks import UploadProof
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,8 @@ async def get_all_request_details_data(dialog_manager: DialogManager, **kwargs) 
             "can_mark_paid": payment_request.status in [PaymentRequestStatus.PENDING, PaymentRequestStatus.SCHEDULED_TODAY, PaymentRequestStatus.SCHEDULED_DATE],
             "can_schedule": payment_request.status == PaymentRequestStatus.PENDING,
             "can_cancel": payment_request.status in [PaymentRequestStatus.PENDING, PaymentRequestStatus.SCHEDULED_TODAY, PaymentRequestStatus.SCHEDULED_DATE],
+            # Можно ли оплатить досрочно (только запланированные запросы)
+            "can_pay_early": payment_request.status in [PaymentRequestStatus.SCHEDULED_TODAY, PaymentRequestStatus.SCHEDULED_DATE],
         }
 
 
@@ -204,6 +208,48 @@ async def on_download_proof_billing(callback: CallbackQuery, button: Button, man
         await callback.answer("Платежка не прикреплена", show_alert=True)
 
 
+async def on_pay_early(callback: CallbackQuery, button: Button, manager: DialogManager):
+    """Обработчик досрочной оплаты запроса"""
+    request_id = manager.dialog_data.get("selected_request_id")
+
+    if not request_id:
+        await callback.answer("❌ Ошибка: ID запроса не найден", show_alert=True)
+        return
+
+    async with get_session() as session:
+        payment_request = await PaymentRequestCRUD.get_payment_request_by_id(session, request_id)
+
+        if not payment_request:
+            await callback.answer("❌ Запрос не найден", show_alert=True)
+            return
+
+        # Проверяем что запрос еще не оплачен и не отменен
+        if payment_request.status in [PaymentRequestStatus.PAID, PaymentRequestStatus.CANCELLED]:
+            await callback.answer("❌ Запрос уже обработан", show_alert=True)
+            return
+
+    # Получаем FSM context из event
+    state: FSMContext = manager.middleware_data.get("state")
+    if not state:
+        await callback.answer("❌ Ошибка: не удалось получить FSM context", show_alert=True)
+        return
+
+    # Сохраняем request_id в FSM state
+    await state.set_state(UploadProof.waiting_for_document)
+    await state.update_data(request_id=request_id)
+
+    # Закрываем диалог
+    await manager.done()
+
+    # Отправляем инструкцию
+    await callback.message.answer(
+        "📎 <b>Досрочная оплата запроса</b>\n\n"
+        "Пожалуйста, отправьте документ с платежкой (скриншот или PDF).\n\n"
+        "Для отмены отправьте /cancel"
+    )
+    await callback.answer()
+
+
 async def on_back_to_all_list(callback: CallbackQuery, button: Button, manager: DialogManager):
     """Возврат к списку всех запросов"""
     manager.show_mode = ShowMode.EDIT
@@ -217,7 +263,7 @@ all_list_window = Window(
     Const("💰 <b>Все запросы на оплату</b>\n"),
     Format("Всего запросов: {total_count}\nПоказано: {count}\n", when="count"),
     Const(
-        "\n<i>Статусы:</i> ⏳ Ожидает • 📅 Запланировано • ✅ Оплачено • ❌ Отменено\n",
+        "\n<i>Статусы:</i>\n⏳ Ожидает\n📅 Запланировано\n✅ Оплачено\n❌ Отменено\n---------------------------------------",
         when="count"
     ),
     Const("\nЗапросов на оплату пока нет.", when=lambda data, widget, manager: data.get("count", 0) == 0),
@@ -293,9 +339,15 @@ all_details_window = Window(
         on_click=on_download_proof_billing,
         when="has_payment_proof",
     ),
+    Button(
+        Const("✅ Оплатить досрочно"),
+        id="pay_early",
+        on_click=on_pay_early,
+        when="can_pay_early",
+    ),
     Const(
-        "\n💡 <i>Для действий используйте inline кнопки в уведомлениях</i>",
-        when=lambda data, widget, manager: data.get("can_mark_paid") or data.get("can_schedule") or data.get("can_cancel"),
+        "\n💡 <i>Для других действий используйте inline кнопки в уведомлениях</i>",
+        when=lambda data, widget, manager: (data.get("can_schedule") or data.get("can_cancel")) and not data.get("can_pay_early"),
     ),
     Button(
         Const("⬅️ Назад к списку"),
