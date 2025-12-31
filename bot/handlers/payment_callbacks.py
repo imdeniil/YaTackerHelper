@@ -641,15 +641,25 @@ async def on_worker_payment_goto_main_menu(callback: CallbackQuery, dialog_manag
 
     await callback.answer()
 
-    # Закрываем все текущие диалоги
-    if dialog_manager.has_context():
-        await dialog_manager.done()
+    # Полностью сбрасываем все диалоги через bg_manager
+    bg = dialog_manager.bg()
 
-    # Запускаем главное меню с явным указанием ОТПРАВИТЬ новое сообщение
-    await dialog_manager.start(
+    # Закрываем ВСЕ активные диалоги для этого пользователя
+    try:
+        # Пытаемся получить текущий стек и очистить его
+        if dialog_manager.has_context():
+            # Получаем весь стек
+            while dialog_manager.has_context():
+                await dialog_manager.done()
+    except Exception as e:
+        logger.debug(f"Error closing dialogs: {e}")
+
+    # Запускаем главное меню через bg_manager (это гарантирует новое сообщение)
+    await bg.start(
         MainMenu.main,
-        mode=StartMode.RESET_STACK,
-        show_mode=ShowMode.SEND  # ← Ключевой параметр: отправить НОВОЕ сообщение
+        user_id=callback.from_user.id,
+        chat_id=callback.message.chat.id,
+        mode=StartMode.RESET_STACK
     )
 
 
