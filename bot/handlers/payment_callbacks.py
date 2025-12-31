@@ -6,7 +6,7 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram_dialog import DialogManager, StartMode, ShowMode
+from aiogram_dialog import DialogManager, StartMode
 
 from bot.database import get_session, PaymentRequestCRUD, UserCRUD, PaymentRequestStatus, BillingNotificationCRUD
 from bot.states import MainMenu
@@ -647,18 +647,14 @@ async def on_worker_payment_goto_main_menu(callback: CallbackQuery, dialog_manag
     except Exception as e:
         logger.debug(f"Error resetting stack: {e}")
 
-    # Получаем bg_manager и запускаем главное меню
-    bg = dialog_manager.bg()
+    # Отправляем простое сообщение и запускаем на нем диалог
+    sent_message = await callback.message.answer("Загрузка главного меню...")
 
-    # Запускаем главное меню через bg_manager с RESET_STACK
-    # Это должно гарантировать отправку нового сообщения
-    await bg.start(
-        MainMenu.main,
-        user_id=callback.from_user.id,
-        chat_id=callback.message.chat.id,
-        mode=StartMode.RESET_STACK,
-        show_mode=ShowMode.SEND  # Явно указываем отправить новое сообщение
-    )
+    # Импортируем cmd_start из commands
+    from bot.handlers.commands import cmd_start
+
+    # Вызываем обработчик /start напрямую с отправленным сообщением
+    await cmd_start(sent_message, dialog_manager)
 
 
 @payment_callbacks_router.message(CancelWithComment.waiting_for_comment)
