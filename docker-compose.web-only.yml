@@ -22,7 +22,7 @@ services:
 
       # Переопределяем host и port для Docker
       WEB_HOST: 0.0.0.0
-      WEB_PORT: 5008
+      WEB_PORT: ${WEB_PORT}
 
       # Nginx-proxy переменные
       VIRTUAL_HOST: ${VIRTUAL_HOST}
@@ -30,7 +30,7 @@ services:
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
 
       # Expose для nginx-proxy
-      VIRTUAL_PORT: 5008
+      VIRTUAL_PORT: ${WEB_PORT}
 
     networks:
       - proxy
