@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 # Router для callback handlers
 payment_callbacks_router = Router()
 
-
 # FSM для загрузки платежки
 class UploadProof(StatesGroup):
     waiting_for_document = State()

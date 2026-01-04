@@ -14,6 +14,7 @@ dependencies = [
     "pytz>=2025.2",
     "sqlalchemy>=2.0.43",
     "yatrackerapi==2.1.3",
+    "python-fasthtml>=0.6.0",
 ]
 
 [project.urls]

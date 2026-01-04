@@ -1,0 +1,27 @@
+# Используем официальный Python образ
+FROM python:3.11-slim
+
+# Устанавливаем рабочую директорию
+WORKDIR /app
+
+# Копируем uv из официального образа
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Копируем файлы проекта
+COPY pyproject.toml uv.lock ./
+
+# Устанавливаем зависимости через uv
+RUN uv sync --frozen
+
+# Копируем остальные файлы приложения
+COPY . .
+
+# Создаем пользователя для запуска приложения (безопасность)
+RUN useradd -m -u 1000 webuser && chown -R webuser:webuser /app
+USER webuser
+
+# Expose порт для веб-приложения
+EXPOSE 5008
+
+# Команда запуска веб-приложения
+CMD ["uv", "run", "python", "run_web.py"]

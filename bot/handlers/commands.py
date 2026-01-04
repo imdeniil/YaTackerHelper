@@ -10,7 +10,6 @@ from bot.states import MainMenu
 
 router = Router(name="commands")
 
-
 @router.message(CommandStart())
 async def cmd_start(message: Message, dialog_manager: DialogManager):
     """

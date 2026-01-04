@@ -1,0 +1,101 @@
+version: '3.8'
+
+# Docker Compose файл для запуска бота + веб-приложения + БД
+# Полный стек с nginx-proxy и Let's Encrypt
+
+services:
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: yatrackerhelper_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: yatrackerhelper
+      POSTGRES_USER: yatrackerhelper
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yatrackerhelper"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - yatrackerhelper_network
+
+  # Telegram бот
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yatrackerhelper_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Используем внутреннее имя контейнера для подключения к БД
+      DATABASE_URL: postgresql+asyncpg://yatrackerhelper:${DB_PASSWORD:-changeme}@postgres:5432/yatrackerhelper
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - yatrackerhelper_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Веб-приложение FastHTML
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: yatrackerhelper_web
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Используем внутреннее имя контейнера для подключения к БД
+      DATABASE_URL: postgresql+asyncpg://yatrackerhelper:${DB_PASSWORD:-changeme}@postgres:5432/yatrackerhelper
+
+      # Переопределяем host и port для Docker
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: 8000
+
+      # Nginx-proxy переменные
+      VIRTUAL_HOST: ${VIRTUAL_HOST:-yatrackerhelper.yourdomain.com}
+      LETSENCRYPT_HOST: ${LETSENCRYPT_HOST:-yatrackerhelper.yourdomain.com}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-your-email@example.com}
+
+      # Expose для nginx-proxy
+      VIRTUAL_PORT: 8000
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - yatrackerhelper_network
+      - proxy
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Volumes
+volumes:
+  postgres_data:
+    driver: local
+  certs:
+  html:
+  acme:
+
+# Networks
+networks:
+  yatrackerhelper_network:
+    driver: bridge
+  proxy:
+    external: true

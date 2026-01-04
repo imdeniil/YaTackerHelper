@@ -40,7 +40,15 @@
       "Bash(grep:*)",
       "Bash(alembic downgrade:*)",
       "Bash(Select-String -Pattern \"Dialog\\(\" -Path \"bot/dialogs/payment_request.py\")",
-      "Bash(Select-Object -Last 5)"
+      "Bash(Select-Object -Last 5)",
+      "Bash(git checkout:*)",
+      "Bash(git rm:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(dir \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\dialogs\\all_payment_requests\")",
+      "Bash(dir \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\dialogs\\clone_project\")",
+      "Bash(dir /B \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\dialogs\\*.py\")",
+      "Bash(powershell -Command:*)",
+      "mcp__context7__query-docs"
     ],
     "deny": [],
     "ask": []
