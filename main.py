@@ -15,7 +15,6 @@ from bot.handlers import commands_router, payment_callbacks_router
 from bot.dialogs import (
     main_menu_dialog,
     clone_project_dialog,
-    project_info_dialog,
     user_management_dialog,
     user_settings_dialog,
     payment_request_creation_dialog,
@@ -133,7 +132,6 @@ async def main(reset_database: bool = False, confirm_reset: bool = False, contin
     # Регистрация диалогов
     dp.include_router(main_menu_dialog)
     dp.include_router(clone_project_dialog)
-    dp.include_router(project_info_dialog)
     dp.include_router(user_management_dialog)
     dp.include_router(user_settings_dialog)
     dp.include_router(payment_request_creation_dialog)

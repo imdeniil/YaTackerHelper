@@ -1,54 +1,38 @@
 version: '3.8'
 
-# Docker Compose файл для запуска только веб-приложения
-# Используй этот файл, если бот и БД уже запущены отдельно
-
 services:
-  # Веб-приложение FastHTML
   web:
     build:
       context: .
       dockerfile: Dockerfile.web
+      args:
+        WEB_PORT: ${WEB_PORT}
     container_name: yatrackerhelper_web
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      # DATABASE_URL берется из .env файла
-      # Формат: postgresql+asyncpg://user:password@host:port/database
-      # Если БД на host машине:
-      # - Windows/Mac: host.docker.internal
-      # - Linux: 172.17.0.1
-
-      # Переопределяем host и port для Docker
       WEB_HOST: 0.0.0.0
       WEB_PORT: ${WEB_PORT}
-
-      # Nginx-proxy переменные
       VIRTUAL_HOST: ${VIRTUAL_HOST}
       LETSENCRYPT_HOST: ${LETSENCRYPT_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
-
-      # Expose для nginx-proxy
       VIRTUAL_PORT: ${WEB_PORT}
 
     networks:
       - proxy
 
-    # Логирование
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-# Volumes для Let's Encrypt
 volumes:
   certs:
   html:
   acme:
 
-# Подключение к внешней сети nginx-proxy
 networks:
   proxy:
     external: true

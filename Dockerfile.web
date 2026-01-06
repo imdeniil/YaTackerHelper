@@ -1,3 +1,5 @@
+ARG WEB_PORT
+
 # Используем официальный Python образ
 FROM python:3.11-slim
 
@@ -21,7 +23,7 @@ RUN useradd -m -u 1000 webuser && chown -R webuser:webuser /app
 USER webuser
 
 # Expose порт для веб-приложения
-EXPOSE 5008
+EXPOSE ${WEB_PORT}
 
 # Команда запуска веб-приложения
 CMD ["uv", "run", "python", "run_web.py"]
