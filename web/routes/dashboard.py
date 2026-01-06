@@ -7,7 +7,8 @@ from web.database import get_session, UserCRUD, PaymentRequestCRUD
 from web.config import WebConfig
 from web.components import (
     page_layout, stat_item, payment_request_table,
-    create_payment_form, filter_tabs, user_table, card
+    create_payment_form, filter_tabs, user_table, card,
+    payment_request_detail, user_edit_form, user_create_form
 )
 from bot.database.models import UserRole, PaymentRequestStatus
 
@@ -151,16 +152,6 @@ def setup_dashboard_routes(app, config: WebConfig):
         ]])
 
         content = Div(
-            # Кнопка управления пользователями для Owner
-            Div(
-                A(
-                    "👥 Управление пользователями",
-                    href="/users",
-                    cls="btn btn-primary"
-                ),
-                cls="mb-4 flex justify-end"
-            ) if role == UserRole.OWNER.value else None,
-
             # Статистика
             Div(
                 stat_item("Всего запросов", str(len(all_requests)), "📊"),
@@ -221,10 +212,235 @@ def setup_dashboard_routes(app, config: WebConfig):
 
         content = Div(
             Div(
-                A("← Назад к Dashboard", href="/dashboard", cls="btn btn-ghost mb-4")
+                H1("Управление пользователями", cls="text-3xl font-bold"),
+                A("+ Создать пользователя", href="/users/create", cls="btn btn-primary"),
+                cls="flex justify-between items-center mb-6"
             ),
 
-            user_table(users)
+            Div(
+                Div(
+                    user_table(users),
+                    cls="card-body p-0"
+                ),
+                cls="card bg-base-100 shadow-xl"
+            )
         )
 
         return page_layout("Управление пользователями", content, display_name, role, current_user.telegram_id if current_user else None)
+
+    @app.get("/payment/{request_id}")
+    @require_auth
+    async def payment_detail(sess, request_id: int):
+        """Детальная страница запроса на оплату"""
+        user_id = sess.get('user_id')
+        display_name = sess.get('display_name')
+        role = sess.get('role')
+
+        async with get_session() as session:
+            current_user = await UserCRUD.get_user_by_id(session, user_id)
+            payment_request = await PaymentRequestCRUD.get_payment_request_by_id(session, request_id)
+
+            if not payment_request:
+                return RedirectResponse('/dashboard', status_code=303)
+
+            # Worker может видеть только свои запросы
+            if role == UserRole.WORKER.value and payment_request.created_by_id != user_id:
+                return RedirectResponse('/dashboard', status_code=303)
+
+        content = payment_request_detail(payment_request, role)
+
+        return page_layout(
+            f"Запрос на оплату #{request_id}",
+            content,
+            display_name,
+            role,
+            current_user.telegram_id if current_user else None
+        )
+
+    @app.post("/payment/{request_id}/schedule")
+    @require_auth
+    @require_role(UserRole.OWNER.value, UserRole.MANAGER.value)
+    async def schedule_payment(sess, request_id: int, schedule_type: str, scheduled_date: str = None):
+        """Планирование оплаты"""
+        user_id = sess.get('user_id')
+
+        async with get_session() as session:
+            if schedule_type == "today":
+                await PaymentRequestCRUD.schedule_payment(
+                    session=session,
+                    request_id=request_id,
+                    processing_by_id=user_id,
+                    is_today=True
+                )
+            else:
+                # Парсим дату из строки формата YYYY-MM-DD
+                from datetime import datetime
+                scheduled_date_obj = datetime.strptime(scheduled_date, "%Y-%m-%d").date()
+                await PaymentRequestCRUD.schedule_payment(
+                    session=session,
+                    request_id=request_id,
+                    processing_by_id=user_id,
+                    scheduled_date=scheduled_date_obj
+                )
+
+            logger.info(f"User {user_id} запланировал оплату запроса #{request_id}")
+
+        return RedirectResponse(f'/payment/{request_id}', status_code=303)
+
+    @app.post("/payment/{request_id}/pay")
+    @require_auth
+    @require_role(UserRole.OWNER.value, UserRole.MANAGER.value)
+    async def mark_payment_as_paid(sess, request_id: int):
+        """Отметка запроса как оплаченного (без загрузки файла)"""
+        user_id = sess.get('user_id')
+
+        async with get_session() as session:
+            # Временно используем пустой file_id, т.к. загрузка файла будет через бот
+            # В будущем это можно улучшить
+            await PaymentRequestCRUD.mark_as_paid(
+                session=session,
+                request_id=request_id,
+                paid_by_id=user_id,
+                payment_proof_file_id="web_payment",  # Временная заглушка
+                processing_by_id=user_id
+            )
+
+            logger.info(f"User {user_id} отметил запрос #{request_id} как оплаченный")
+
+        return RedirectResponse(f'/payment/{request_id}', status_code=303)
+
+    @app.post("/payment/{request_id}/cancel")
+    @require_auth
+    async def cancel_payment(sess, request_id: int):
+        """Отмена запроса на оплату"""
+        user_id = sess.get('user_id')
+        role = sess.get('role')
+
+        async with get_session() as session:
+            payment_request = await PaymentRequestCRUD.get_payment_request_by_id(session, request_id)
+
+            if not payment_request:
+                return RedirectResponse('/dashboard', status_code=303)
+
+            # Worker может отменять только свои запросы
+            if role == UserRole.WORKER.value and payment_request.created_by_id != user_id:
+                return RedirectResponse('/dashboard', status_code=303)
+
+            await PaymentRequestCRUD.cancel_payment_request(session, request_id)
+            logger.info(f"User {user_id} отменил запрос #{request_id}")
+
+        return RedirectResponse('/dashboard', status_code=303)
+
+    @app.get("/users/{user_id}/edit")
+    @require_auth
+    @require_role(UserRole.OWNER.value)
+    async def user_edit_page(sess, user_id: int):
+        """Страница редактирования пользователя (только для Owner)"""
+        current_user_id = sess.get('user_id')
+        display_name = sess.get('display_name')
+        role = sess.get('role')
+
+        async with get_session() as session:
+            current_user = await UserCRUD.get_user_by_id(session, current_user_id)
+            user_to_edit = await UserCRUD.get_user_by_id(session, user_id)
+
+            if not user_to_edit:
+                return RedirectResponse('/users', status_code=303)
+
+        content = Div(
+            A("← Назад к списку пользователей", href="/users", cls="btn btn-ghost btn-sm mb-4"),
+            card(f"Редактирование пользователя: {user_to_edit.display_name}", user_edit_form(user_to_edit))
+        )
+
+        return page_layout(
+            "Редактирование пользователя",
+            content,
+            display_name,
+            role,
+            current_user.telegram_id if current_user else None
+        )
+
+    @app.post("/users/{user_id}/edit")
+    @require_auth
+    @require_role(UserRole.OWNER.value)
+    async def user_edit_submit(
+        sess,
+        user_id: int,
+        display_name: str,
+        telegram_username: str,
+        tracker_login: str,
+        role: str,
+        is_billing_contact: str = None
+    ):
+        """Сохранение изменений пользователя"""
+        current_user_id = sess.get('user_id')
+
+        async with get_session() as session:
+            # Обновляем данные пользователя
+            await UserCRUD.update_user(
+                session=session,
+                user_id=user_id,
+                display_name=display_name,
+                telegram_username=telegram_username.lstrip("@"),
+                tracker_login=tracker_login if tracker_login else None,
+                role=UserRole(role),
+                is_billing_contact=(is_billing_contact == "true")
+            )
+
+            logger.info(f"Owner {current_user_id} обновил данные пользователя #{user_id}")
+
+        return RedirectResponse('/users', status_code=303)
+
+    @app.get("/users/create")
+    @require_auth
+    @require_role(UserRole.OWNER.value)
+    async def user_create_page(sess):
+        """Страница создания нового пользователя (только для Owner)"""
+        current_user_id = sess.get('user_id')
+        display_name = sess.get('display_name')
+        role = sess.get('role')
+
+        async with get_session() as session:
+            current_user = await UserCRUD.get_user_by_id(session, current_user_id)
+
+        content = Div(
+            A("← Назад к списку пользователей", href="/users", cls="btn btn-ghost btn-sm mb-4"),
+            card("Создание нового пользователя", user_create_form())
+        )
+
+        return page_layout(
+            "Создание пользователя",
+            content,
+            display_name,
+            role,
+            current_user.telegram_id if current_user else None
+        )
+
+    @app.post("/users/create")
+    @require_auth
+    @require_role(UserRole.OWNER.value)
+    async def user_create_submit(
+        sess,
+        display_name: str,
+        telegram_username: str,
+        tracker_login: str,
+        role: str,
+        is_billing_contact: str = None
+    ):
+        """Создание нового пользователя"""
+        current_user_id = sess.get('user_id')
+
+        async with get_session() as session:
+            # Создаем нового пользователя
+            new_user = await UserCRUD.create_user(
+                session=session,
+                telegram_username=telegram_username.lstrip("@"),
+                display_name=display_name,
+                role=UserRole(role),
+                tracker_login=tracker_login if tracker_login else None,
+                is_billing_contact=(is_billing_contact == "true")
+            )
+
+            logger.info(f"Owner {current_user_id} создал нового пользователя #{new_user.id}")
+
+        return RedirectResponse('/users', status_code=303)

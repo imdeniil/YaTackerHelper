@@ -38,12 +38,28 @@ def navbar(display_name: str, role: str, telegram_id: Optional[int] = None) -> D
     # Получаем фото профиля из Telegram если есть telegram_id
     avatar_url = f"https://ui-avatars.com/api/?name={display_name}&background=random"
 
+    # Пункты меню в зависимости от роли
+    menu_items = [
+        A("Главная", href="/dashboard", cls="btn btn-ghost")
+    ]
+
+    # Добавляем пункт Пользователи для owner
+    if role.lower() == "owner":
+        menu_items.append(
+            A("Пользователи", href="/users", cls="btn btn-ghost")
+        )
+
     return Div(
         Div(
             # Логотип
             Div(
                 A("Система учета расходов apod-lab", href="/dashboard", cls="btn btn-ghost text-xl"),
                 cls="flex-1"
+            ),
+            # Меню
+            Div(
+                *menu_items,
+                cls="flex-none hidden lg:flex gap-2"
             ),
             # Профиль
             Div(
@@ -190,7 +206,7 @@ def create_payment_form() -> Form:
     )
 
 
-def user_row(user: User) -> Any:
+def user_row(user: User) -> Tr:
     """Строка таблицы пользователя"""
     role_badge_colors = {
         UserRole.OWNER: "badge-error",
@@ -203,18 +219,14 @@ def user_row(user: User) -> Any:
     badge_color = role_badge_colors.get(role, "badge-ghost")
 
     return Tr(
-        Td(f"#{user.id}"),
-        Td(user.display_name, cls="font-medium"),
+        Th(str(user.id)),
+        Td(user.display_name),
         Td(f"@{user.telegram_username}"),
         Td(Span(role.value.upper(), cls=f"badge {badge_color}")),
-        Td("✅ Да" if user.is_billing_contact else "❌ Нет"),
-        Td(user.created_at.strftime("%d.%m.%Y"), cls="text-sm text-gray-600"),
+        Td("Да" if user.is_billing_contact else "Нет"),
+        Td(user.created_at.strftime("%d.%m.%Y")),
         Td(
-            Div(
-                A("✏️", href=f"/users/{user.id}/edit", cls="btn btn-sm btn-ghost", title="Редактировать"),
-                A("🗑️", href=f"/users/{user.id}/delete", cls="btn btn-sm btn-ghost text-error", title="Удалить"),
-                cls="flex gap-1"
-            )
+            A("Редактировать", href=f"/users/{user.id}/edit", cls="btn btn-xs btn-ghost")
         )
     )
 
@@ -223,11 +235,7 @@ def user_table(users: List[User]) -> Div:
     """Таблица пользователей"""
     if not users:
         return Div(
-            Div(
-                H3("👥 Нет пользователей", cls="text-xl font-bold text-center text-gray-500"),
-                cls="card-body items-center"
-            ),
-            cls="card bg-base-100 shadow-xl"
+            P("Нет пользователей", cls="text-center py-8 text-gray-500")
         )
 
     return Div(
@@ -246,7 +254,7 @@ def user_table(users: List[User]) -> Div:
             Tbody(
                 *[user_row(user) for user in users]
             ),
-            cls="table table-zebra"
+            cls="table table-xs"
         ),
         cls="overflow-x-auto"
     )
@@ -307,3 +315,384 @@ def filter_tabs(current_filter: str = "all") -> Div:
             )
 
     return Div(*tab_items, cls="flex gap-2")
+
+
+def payment_request_detail(request: PaymentRequest, user_role: str) -> Div:
+    """Детальная информация о запросе на оплату"""
+    # Определяем доступные действия в зависимости от роли и статуса
+    can_schedule = user_role in ["owner", "manager"] and request.status == PaymentRequestStatus.PENDING.value
+    can_pay = user_role in ["owner", "manager"] and request.status in [
+        PaymentRequestStatus.PENDING.value,
+        PaymentRequestStatus.SCHEDULED_TODAY.value,
+        PaymentRequestStatus.SCHEDULED_DATE.value
+    ]
+    can_cancel = request.status not in [PaymentRequestStatus.PAID.value, PaymentRequestStatus.CANCELLED.value]
+
+    # Основная информация
+    info_section = Div(
+        Div(
+            Div(f"ID: {request.id}", cls="text-sm opacity-70"),
+            Div(f"Статус: ", status_badge(request.status), cls="flex items-center gap-2 mt-2"),
+            cls="mb-4"
+        ),
+        Div(
+            Label("Название для плательщика:", cls="font-bold"),
+            P(request.title, cls="mt-1"),
+            cls="mb-4"
+        ),
+        Div(
+            Label("Сумма:", cls="font-bold"),
+            P(f"{request.amount} ₽", cls="mt-1 text-2xl"),
+            cls="mb-4"
+        ),
+        Div(
+            Label("Комментарий:", cls="font-bold"),
+            P(request.comment, cls="mt-1 whitespace-pre-wrap"),
+            cls="mb-4"
+        ),
+        Div(
+            Label("Создатель:", cls="font-bold"),
+            P(f"{request.created_by.display_name} (@{request.created_by.telegram_username})", cls="mt-1"),
+            cls="mb-4"
+        ),
+        Div(
+            Label("Создано:", cls="font-bold"),
+            P(request.created_at.strftime("%d.%m.%Y %H:%M"), cls="mt-1"),
+            cls="mb-4"
+        ),
+    )
+
+    # Дополнительная информация в зависимости от статуса
+    if request.scheduled_date:
+        info_section = Div(
+            info_section,
+            Div(
+                Label("Запланировано на:", cls="font-bold"),
+                P(request.scheduled_date.strftime("%d.%m.%Y"), cls="mt-1"),
+                cls="mb-4"
+            )
+        )
+
+    if request.processing_by:
+        info_section = Div(
+            info_section,
+            Div(
+                Label("Взято в работу:", cls="font-bold"),
+                P(f"{request.processing_by.display_name} (@{request.processing_by.telegram_username})", cls="mt-1"),
+                cls="mb-4"
+            )
+        )
+
+    if request.paid_at:
+        info_section = Div(
+            info_section,
+            Div(
+                Label("Оплачено:", cls="font-bold"),
+                P(request.paid_at.strftime("%d.%m.%Y %H:%M"), cls="mt-1"),
+                cls="mb-4"
+            )
+        )
+
+    if request.paid_by:
+        info_section = Div(
+            info_section,
+            Div(
+                Label("Оплатил:", cls="font-bold"),
+                P(f"{request.paid_by.display_name} (@{request.paid_by.telegram_username})", cls="mt-1"),
+                cls="mb-4"
+            )
+        )
+
+    # Формы действий
+    actions_section = Div()
+
+    if can_schedule:
+        actions_section = Div(
+            actions_section,
+            card("Запланировать оплату", schedule_payment_form(request.id))
+        )
+
+    if can_pay:
+        actions_section = Div(
+            actions_section,
+            card("Отметить как оплаченный", mark_as_paid_form(request.id))
+        )
+
+    if can_cancel:
+        actions_section = Div(
+            actions_section,
+            Div(
+                Form(
+                    Button(
+                        "Отменить запрос",
+                        type_="submit",
+                        cls="btn btn-error w-full",
+                        onclick="return confirm('Вы уверены что хотите отменить этот запрос?')"
+                    ),
+                    method="POST",
+                    action=f"/payment/{request.id}/cancel"
+                ),
+                cls="mt-4"
+            )
+        )
+
+    return Div(
+        Div(
+            A("← Назад к списку", href="/dashboard", cls="btn btn-ghost btn-sm mb-4"),
+            cls="mb-4"
+        ),
+        card(f"Запрос на оплату #{request.id}", info_section),
+        actions_section if can_schedule or can_pay or can_cancel else None
+    )
+
+
+def schedule_payment_form(request_id: int) -> Form:
+    """Форма планирования оплаты"""
+    return Form(
+        # Выбор "Сегодня" или "На дату"
+        Div(
+            Label("Когда оплатить?", cls="label"),
+            Div(
+                Label(
+                    Input(type_="radio", name="schedule_type", value="today", cls="radio", checked=True),
+                    Span("Сегодня", cls="ml-2"),
+                    cls="label cursor-pointer justify-start gap-2"
+                ),
+                Label(
+                    Input(type_="radio", name="schedule_type", value="date", cls="radio"),
+                    Span("На определенную дату", cls="ml-2"),
+                    cls="label cursor-pointer justify-start gap-2"
+                ),
+                cls="space-y-2"
+            ),
+            cls="form-control mb-4"
+        ),
+
+        # Поле даты (скрывается/показывается в зависимости от выбора)
+        Div(
+            Label("Дата оплаты", cls="label"),
+            Input(
+                type_="date",
+                name="scheduled_date",
+                cls="input input-bordered w-full",
+                id="scheduled_date_input"
+            ),
+            cls="form-control",
+            id="date_field",
+            style="display: none;"
+        ),
+
+        # Кнопка отправки
+        Button(
+            "Запланировать",
+            type_="submit",
+            cls="btn btn-primary w-full mt-4"
+        ),
+
+        # JavaScript для показа/скрытия поля даты
+        Script("""
+            document.querySelectorAll('input[name="schedule_type"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    const dateField = document.getElementById('date_field');
+                    const dateInput = document.getElementById('scheduled_date_input');
+                    if (this.value === 'date') {
+                        dateField.style.display = 'block';
+                        dateInput.required = true;
+                    } else {
+                        dateField.style.display = 'none';
+                        dateInput.required = false;
+                    }
+                });
+            });
+        """),
+
+        method="POST",
+        action=f"/payment/{request_id}/schedule"
+    )
+
+
+def mark_as_paid_form(request_id: int) -> Form:
+    """Форма отметки как оплаченного (упрощенная версия без загрузки файла)"""
+    return Form(
+        Div(
+            P("После отметки как оплаченный, запрос будет закрыт.", cls="text-sm opacity-70 mb-4"),
+            P("Загрузка платежного документа будет доступна через Telegram бот.", cls="text-sm opacity-70 mb-4"),
+            cls="mb-4"
+        ),
+
+        # Кнопка отправки
+        Button(
+            "Отметить как оплаченный",
+            type_="submit",
+            cls="btn btn-success w-full",
+            onclick="return confirm('Вы уверены что хотите отметить этот запрос как оплаченный?')"
+        ),
+
+        method="POST",
+        action=f"/payment/{request_id}/pay"
+    )
+
+
+def user_edit_form(user: User) -> Form:
+    """Форма редактирования пользователя"""
+    return Form(
+        # ФИО
+        Div(
+            Label("ФИО", cls="label"),
+            Input(
+                type_="text",
+                name="display_name",
+                value=user.display_name,
+                required=True,
+                cls="input input-bordered w-full"
+            ),
+            cls="form-control mb-4"
+        ),
+
+        # Username
+        Div(
+            Label("Telegram Username (без @)", cls="label"),
+            Input(
+                type_="text",
+                name="telegram_username",
+                value=user.telegram_username,
+                required=True,
+                cls="input input-bordered w-full"
+            ),
+            cls="form-control mb-4"
+        ),
+
+        # Tracker Login
+        Div(
+            Label("Логин в Yandex Tracker (опционально)", cls="label"),
+            Input(
+                type_="text",
+                name="tracker_login",
+                value=user.tracker_login or "",
+                cls="input input-bordered w-full"
+            ),
+            cls="form-control mb-4"
+        ),
+
+        # Роль
+        Div(
+            Label("Роль", cls="label"),
+            Select(
+                Option("OWNER", value=UserRole.OWNER.value, selected=user.role == UserRole.OWNER),
+                Option("MANAGER", value=UserRole.MANAGER.value, selected=user.role == UserRole.MANAGER),
+                Option("WORKER", value=UserRole.WORKER.value, selected=user.role == UserRole.WORKER),
+                name="role",
+                required=True,
+                cls="select select-bordered w-full"
+            ),
+            cls="form-control mb-4"
+        ),
+
+        # Billing Contact
+        Div(
+            Label(
+                Input(
+                    type_="checkbox",
+                    name="is_billing_contact",
+                    value="true",
+                    checked=user.is_billing_contact,
+                    cls="checkbox"
+                ),
+                Span("Billing Contact", cls="ml-2"),
+                cls="label cursor-pointer justify-start gap-2"
+            ),
+            cls="form-control mb-4"
+        ),
+
+        # Кнопки
+        Div(
+            Button("Сохранить", type_="submit", cls="btn btn-primary"),
+            A("Отмена", href="/users", cls="btn btn-ghost"),
+            cls="flex gap-2"
+        ),
+
+        method="POST",
+        action=f"/users/{user.id}/edit"
+    )
+
+
+def user_create_form() -> Form:
+    """Форма создания нового пользователя"""
+    return Form(
+        # ФИО
+        Div(
+            Label("ФИО", cls="label"),
+            Input(
+                type_="text",
+                name="display_name",
+                placeholder="Иванов Иван Иванович",
+                required=True,
+                cls="input input-bordered w-full"
+            ),
+            cls="form-control mb-4"
+        ),
+
+        # Username
+        Div(
+            Label("Telegram Username (без @)", cls="label"),
+            Input(
+                type_="text",
+                name="telegram_username",
+                placeholder="username",
+                required=True,
+                cls="input input-bordered w-full"
+            ),
+            cls="form-control mb-4"
+        ),
+
+        # Tracker Login
+        Div(
+            Label("Логин в Yandex Tracker (опционально)", cls="label"),
+            Input(
+                type_="text",
+                name="tracker_login",
+                placeholder="i.ivanov",
+                cls="input input-bordered w-full"
+            ),
+            cls="form-control mb-4"
+        ),
+
+        # Роль
+        Div(
+            Label("Роль", cls="label"),
+            Select(
+                Option("WORKER", value=UserRole.WORKER.value, selected=True),
+                Option("MANAGER", value=UserRole.MANAGER.value),
+                Option("OWNER", value=UserRole.OWNER.value),
+                name="role",
+                required=True,
+                cls="select select-bordered w-full"
+            ),
+            cls="form-control mb-4"
+        ),
+
+        # Billing Contact
+        Div(
+            Label(
+                Input(
+                    type_="checkbox",
+                    name="is_billing_contact",
+                    value="true",
+                    cls="checkbox"
+                ),
+                Span("Billing Contact", cls="ml-2"),
+                cls="label cursor-pointer justify-start gap-2"
+            ),
+            cls="form-control mb-4"
+        ),
+
+        # Кнопки
+        Div(
+            Button("Создать", type_="submit", cls="btn btn-primary"),
+            A("Отмена", href="/users", cls="btn btn-ghost"),
+            cls="flex gap-2"
+        ),
+
+        method="POST",
+        action="/users/create"
+    )
