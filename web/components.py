@@ -36,8 +36,7 @@ def stat_item(title: str, value: str, icon: str = "📊") -> Div:
 def navbar(display_name: str, role: str, telegram_id: Optional[int] = None) -> Div:
     """Навигационная панель с аватаром из Telegram"""
     # Получаем фото профиля из Telegram если есть telegram_id
-    # Telegram позволяет получить аватар через userpic API
-    avatar_url = f"https://t.me/i/userpic/320/{telegram_id}.jpg" if telegram_id else None
+    avatar_url = f"https://ui-avatars.com/api/?name={display_name}&background=random"
 
     return Div(
         Div(
@@ -56,33 +55,23 @@ def navbar(display_name: str, role: str, telegram_id: Optional[int] = None) -> D
                         cls="btn btn-ghost btn-circle avatar"
                     )(
                         Div(cls="w-10 rounded-full")(
-                            Img(
-                                src=avatar_url if avatar_url else f"https://ui-avatars.com/api/?name={display_name}&background=random",
-                                alt=display_name
-                            )
+                            Img(src=avatar_url, alt=display_name)
                         )
                     ),
                     # Dropdown меню
                     Ul(
+                        Li(A(f"👤 {display_name}", cls="justify-between")(Span(role.upper(), cls="badge"))),
+                        Li(A("🚪 Выйти", href="/logout")),
                         tabindex="0",
-                        cls="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow"
-                    )(
-                        Li()(
-                            A(
-                                f"👤 {display_name}",
-                                cls="justify-between"
-                            )(
-                                Span(role.upper(), cls="badge")
-                            )
-                        ),
-                        Li()(A("🚪 Выйти", href="/logout"))
+                        cls="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52"
                     ),
                     cls="dropdown dropdown-end"
                 ),
                 cls="flex-none"
             ),
-            cls="navbar bg-base-100"
+            cls="navbar bg-base-100 shadow-lg"
         ),
+        cls="mb-8"
     )
 
 
@@ -267,18 +256,32 @@ def page_layout(title: str, content: Any, user_name: str, role: str, telegram_id
     """Общий layout для страниц дашборда"""
     return Html(
         Head(
-            Title(f"{title} - Система учета расходов apod-lab"),
             Meta(charset="utf-8"),
             Meta(name="viewport", content="width=device-width, initial-scale=1"),
+            Title(f"{title} - Система учета расходов apod-lab"),
+            Script(src="https://cdn.tailwindcss.com"),
+            Link(href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css", rel="stylesheet", type_="text/css"),
         ),
         Body(
             navbar(user_name, role, telegram_id),
-            Div(
+            Main(
                 content,
-                cls="container mx-auto p-4"
+                cls="container mx-auto px-4 py-8"
             ),
             data_theme="light"
         )
+    )
+
+
+def card(title: str, *content) -> Div:
+    """Card компонент по образцу из template.py"""
+    return Div(
+        Div(
+            H2(title, cls="card-title"),
+            *content,
+            cls="card-body"
+        ),
+        cls="card bg-base-100 shadow-xl"
     )
 
 

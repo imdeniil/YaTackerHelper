@@ -7,7 +7,7 @@ from web.database import get_session, UserCRUD, PaymentRequestCRUD
 from web.config import WebConfig
 from web.components import (
     page_layout, stat_item, payment_request_table,
-    create_payment_form, filter_tabs, user_table
+    create_payment_form, filter_tabs, user_table, card
 )
 from bot.database.models import UserRole, PaymentRequestStatus
 
@@ -96,44 +96,28 @@ def setup_dashboard_routes(app, config: WebConfig):
         pending_count = len([r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value])
 
         content = Div(
-            # Статистика в card
+            # Статистика
             Div(
-                Div(
-                    stat_item("Всего запросов", str(len(all_requests)), "📊"),
-                    stat_item("Ожидает оплаты", str(pending_count), "⏳"),
-                    stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
-                    cls="stats stats-vertical lg:stats-horizontal shadow w-full"
-                ),
-                cls="mb-4"
+                stat_item("Всего запросов", str(len(all_requests)), "📊"),
+                stat_item("Ожидает оплаты", str(pending_count), "⏳"),
+                stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
+                cls="stats stats-vertical lg:stats-horizontal shadow w-full mb-4"
             ),
 
-            # Фильтры в card
-            Div(
-                Div(
-                    filter_tabs(filter_status),
-                    cls="card-body"
-                ),
-                cls="card bg-base-100 shadow-xl mb-4 w-full"
-            ),
+            # Фильтры
+            card("Фильтры", filter_tabs(filter_status)),
 
-            # Таблица в card
+            # Таблица
             Div(
                 Div(
                     payment_request_table(requests, show_creator=False),
                     cls="card-body p-0"
                 ),
-                cls="card bg-base-100 shadow-xl mb-4 w-full"
+                cls="card bg-base-100 shadow-xl my-4"
             ),
 
             # Форма создания
-            Div(
-                Div(
-                    H3("Создать новый запрос", cls="card-title mb-4"),
-                    create_payment_form(),
-                    cls="card-body"
-                ),
-                cls="card bg-base-100 shadow-xl w-full"
-            )
+            card("Создать новый запрос", create_payment_form())
         )
 
         return page_layout("Worker Dashboard", content, user.display_name, user.role.value, user.telegram_id)
@@ -186,22 +170,16 @@ def setup_dashboard_routes(app, config: WebConfig):
                 cls="stats stats-vertical lg:stats-horizontal shadow w-full mb-4"
             ),
 
-            # Фильтры в card
-            Div(
-                Div(
-                    filter_tabs(filter_status),
-                    cls="card-body"
-                ),
-                cls="card bg-base-100 shadow-xl mb-4 w-full"
-            ),
+            # Фильтры
+            card("Фильтры", filter_tabs(filter_status)),
 
-            # Таблица в card
+            # Таблица
             Div(
                 Div(
                     payment_request_table(requests, show_creator=True),
                     cls="card-body p-0"
                 ),
-                cls="card bg-base-100 shadow-xl w-full"
+                cls="card bg-base-100 shadow-xl my-4"
             )
         )
 
