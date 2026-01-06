@@ -1,12 +1,11 @@
 """Маршруты dashboard для разных ролей"""
 
 import logging
-from functools import wraps
 from fasthtml.common import *
 from web.database import get_session, UserCRUD, PaymentRequestCRUD
 from web.config import WebConfig
 from web.components import (
-    page_layout, stats_group, payment_request_table,
+    page_layout, stat_card, payment_request_table,
     create_payment_form, filter_tabs, user_table
 )
 from bot.database.models import UserRole, PaymentRequestStatus
@@ -16,24 +15,22 @@ logger = logging.getLogger(__name__)
 
 def require_auth(f):
     """Декоратор для проверки авторизации"""
-    @wraps(f)
-    async def wrapper(sess, **kwargs):
+    async def wrapper(sess, *args, **kwargs):
         user_id = sess.get('user_id')
         if not user_id:
             return RedirectResponse('/login', status_code=303)
-        return await f(sess, **kwargs)
+        return await f(sess, *args, **kwargs)
     return wrapper
 
 
 def require_role(*allowed_roles):
     """Декоратор для проверки роли"""
     def decorator(f):
-        @wraps(f)
-        async def wrapper(sess, **kwargs):
+        async def wrapper(sess, *args, **kwargs):
             role = sess.get('role')
             if role not in allowed_roles:
                 return RedirectResponse('/dashboard', status_code=303)
-            return await f(sess, **kwargs)
+            return await f(sess, *args, **kwargs)
         return wrapper
     return decorator
 
@@ -96,29 +93,24 @@ def setup_dashboard_routes(app, config: WebConfig):
         pending_count = len([r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value])
 
         content = Div(
-            H1(f"Привет, {user.display_name}!", cls="text-2xl font-bold mb-6"),
+            H1(f"👋 Добро пожаловать, {user.display_name}!", cls="text-3xl font-bold mb-6"),
 
             # Статистика
-            stats_group([
-                ("Всего запросов", str(len(all_requests)), ""),
-                ("Ожидает оплаты", str(pending_count), "На рассмотрении"),
-                ("Оплачено", f"{total_amount:,.0f} ₽", "Общая сумма"),
-            ]),
-
-            # Форма создания
             Div(
-                H2("Создать новый запрос", cls="text-xl font-bold mb-4"),
-                create_payment_form(),
-                cls="mt-8"
+                stat_card("Всего запросов", str(len(all_requests)), "📊"),
+                stat_card("Ожидает оплаты", str(pending_count), "⏳"),
+                stat_card("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
+                cls="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6"
             ),
 
+            # Форма создания
+            H2("💰 Создать новый запрос", cls="text-2xl font-bold mb-4"),
+            create_payment_form(),
+
             # Список запросов
-            Div(
-                H2("Мои запросы", cls="text-xl font-bold mb-4"),
-                filter_tabs(filter_status),
-                payment_request_table(requests, show_creator=False),
-                cls="mt-8"
-            )
+            H2("📋 Мои запросы", cls="text-2xl font-bold mt-8 mb-4"),
+            filter_tabs(filter_status),
+            payment_request_table(requests, show_creator=False)
         )
 
         return page_layout("Worker Dashboard", content, user.display_name, user.role.value)
@@ -155,32 +147,28 @@ def setup_dashboard_routes(app, config: WebConfig):
         manage_users_btn = None
         if role == UserRole.OWNER.value:
             manage_users_btn = Div(
-                A("Управление пользователями", href="/users", cls="btn btn-outline btn-sm"),
-                cls="flex justify-end mb-4"
+                A("👥 Управление пользователями", href="/users", cls="btn btn-outline btn-primary"),
+                cls="mb-6"
             )
 
         content = Div(
-            Div(
-                H1(f"Привет, {user.display_name}!", cls="text-2xl font-bold"),
-                manage_users_btn,
-                cls="flex items-center justify-between mb-6"
-            ),
+            H1(f"👋 Добро пожаловать, {user.display_name}!", cls="text-3xl font-bold mb-6"),
+
+            manage_users_btn,
 
             # Статистика
-            stats_group([
-                ("Всего запросов", str(len(all_requests)), "За всё время"),
-                ("Ожидает", str(pending_count), "Требует действий"),
-                ("Запланировано", str(scheduled_count), "В работе"),
-                ("Оплачено", f"{total_amount:,.0f} ₽", "Общая сумма"),
-            ]),
+            Div(
+                stat_card("Всего запросов", str(len(all_requests)), "📊"),
+                stat_card("Ожидает оплаты", str(pending_count), "⏳"),
+                stat_card("Запланировано", str(scheduled_count), "📅"),
+                stat_card("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
+                cls="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6"
+            ),
 
             # Список всех запросов
-            Div(
-                H2("Все запросы на оплату", cls="text-xl font-bold mb-4"),
-                filter_tabs(filter_status),
-                payment_request_table(requests, show_creator=True),
-                cls="mt-8"
-            )
+            H2("📋 Все запросы на оплату", cls="text-2xl font-bold mb-4"),
+            filter_tabs(filter_status),
+            payment_request_table(requests, show_creator=True)
         )
 
         return page_layout(f"{role.upper()} Dashboard", content, user.display_name, user.role.value)
@@ -219,12 +207,12 @@ def setup_dashboard_routes(app, config: WebConfig):
 
         content = Div(
             Div(
-                H1("Управление пользователями", cls="text-2xl font-bold"),
-                A("← Назад", href="/dashboard", cls="btn btn-ghost btn-sm"),
+                H1("👥 Управление пользователями", cls="text-3xl font-bold"),
+                A("← Назад к Dashboard", href="/dashboard", cls="btn btn-ghost"),
                 cls="flex justify-between items-center mb-6"
             ),
 
             user_table(users)
         )
 
-        return page_layout("Пользователи", content, display_name, role)
+        return page_layout("Управление пользователями", content, display_name, role)
