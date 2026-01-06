@@ -96,36 +96,44 @@ def setup_dashboard_routes(app, config: WebConfig):
         pending_count = len([r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value])
 
         content = Div(
-            # Приветствие
+            # Статистика в card
             Div(
-                H1(f"Добро пожаловать, {user.display_name}!", cls="text-4xl font-bold mb-2"),
-                P("Управляйте своими запросами на оплату", cls="text-gray-600 text-lg mb-8"),
+                Div(
+                    Div(
+                        stat_card("Всего запросов", str(len(all_requests)), "📊"),
+                        stat_card("Ожидает оплаты", str(pending_count), "⏳"),
+                        stat_card("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
+                        cls="stats stats-vertical lg:stats-horizontal w-full"
+                    ),
+                    cls="card-body"
+                ),
+                cls="card bg-base-100 shadow-sm mb-4"
             ),
 
-            # Статистика
+            # Фильтры в card
             Div(
-                stat_card("Всего запросов", str(len(all_requests)), "📊", "bg-white", "primary"),
-                stat_card("Ожидает оплаты", str(pending_count), "⏳", "bg-white", "warning"),
-                stat_card("Оплачено всего", f"{total_amount:,.0f} ₽", "💰", "bg-white", "success"),
-                cls="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
+                Div(
+                    filter_tabs(filter_status),
+                    cls="card-body"
+                ),
+                cls="card bg-base-100 shadow-sm mb-4"
             ),
+
+            # Таблица
+            payment_request_table(requests, show_creator=False),
 
             # Форма создания
             Div(
-                H2("Создать новый запрос", cls="text-2xl font-bold mb-4"),
-                create_payment_form(),
-                cls="mb-8"
-            ),
-
-            # Список запросов
-            Div(
-                H2("Мои запросы", cls="text-2xl font-bold mb-4"),
-                filter_tabs(filter_status),
-                payment_request_table(requests, show_creator=False)
+                Div(
+                    H3("Создать новый запрос", cls="card-title mb-4"),
+                    create_payment_form(),
+                    cls="card-body"
+                ),
+                cls="card bg-base-100 shadow-sm mt-4"
             )
         )
 
-        return page_layout("Worker Dashboard", content, user.display_name, user.role.value)
+        return page_layout("Worker Dashboard", content, user.display_name, user.role.value, user.telegram_id)
 
     async def owner_dashboard(session, user, role, filter_status):
         """Dashboard для Owner/Manager - просмотр всех запросов и статистика"""
@@ -156,38 +164,45 @@ def setup_dashboard_routes(app, config: WebConfig):
         ]])
 
         content = Div(
-            # Приветствие и кнопка управления
+            # Кнопка управления пользователями для Owner
             Div(
-                Div(
-                    H1(f"Добро пожаловать, {user.display_name}!", cls="text-4xl font-bold mb-2"),
-                    P("Полный контроль над всеми запросами на оплату", cls="text-gray-600 text-lg"),
-                ),
                 A(
                     "👥 Управление пользователями",
                     href="/users",
-                    cls="btn btn-outline btn-primary btn-lg"
-                ) if role == UserRole.OWNER.value else None,
-                cls="flex justify-between items-start mb-8"
+                    cls="btn btn-primary"
+                ),
+                cls="mb-4 flex justify-end"
+            ) if role == UserRole.OWNER.value else None,
+
+            # Статистика в card
+            Div(
+                Div(
+                    Div(
+                        stat_card("Всего запросов", str(len(all_requests)), "📊"),
+                        stat_card("Ожидает оплаты", str(pending_count), "⏳"),
+                        stat_card("Запланировано", str(scheduled_count), "📅"),
+                        stat_card("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
+                        cls="stats stats-vertical lg:stats-horizontal w-full"
+                    ),
+                    cls="card-body"
+                ),
+                cls="card bg-base-100 shadow-sm mb-4"
             ),
 
-            # Статистика
+            # Фильтры в card
             Div(
-                stat_card("Всего запросов", str(len(all_requests)), "📊", "bg-white", "primary"),
-                stat_card("Ожидает оплаты", str(pending_count), "⏳", "bg-white", "warning"),
-                stat_card("Запланировано", str(scheduled_count), "📅", "bg-white", "info"),
-                stat_card("Оплачено всего", f"{total_amount:,.0f} ₽", "💰", "bg-white", "success"),
-                cls="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
+                Div(
+                    filter_tabs(filter_status),
+                    cls="card-body"
+                ),
+                cls="card bg-base-100 shadow-sm mb-4"
             ),
 
-            # Список всех запросов
-            Div(
-                H2("Все запросы на оплату", cls="text-2xl font-bold mb-4"),
-                filter_tabs(filter_status),
-                payment_request_table(requests, show_creator=True)
-            )
+            # Таблица
+            payment_request_table(requests, show_creator=True)
         )
 
-        return page_layout(f"{role.upper()} Dashboard", content, user.display_name, user.role.value)
+        return page_layout(f"{role.upper()} Dashboard", content, user.display_name, user.role.value, user.telegram_id)
 
     @app.post("/payment/create")
     @require_auth
@@ -215,20 +230,20 @@ def setup_dashboard_routes(app, config: WebConfig):
     @require_role(UserRole.OWNER.value)
     async def users_list(sess):
         """Список всех пользователей (только для Owner)"""
+        user_id = sess.get('user_id')
         display_name = sess.get('display_name')
         role = sess.get('role')
 
         async with get_session() as session:
+            current_user = await UserCRUD.get_user_by_id(session, user_id)
             users = await UserCRUD.get_all_users(session)
 
         content = Div(
             Div(
-                H1("👥 Управление пользователями", cls="text-3xl font-bold"),
-                A("← Назад к Dashboard", href="/dashboard", cls="btn btn-ghost"),
-                cls="flex justify-between items-center mb-6"
+                A("← Назад к Dashboard", href="/dashboard", cls="btn btn-ghost mb-4")
             ),
 
             user_table(users)
         )
 
-        return page_layout("Управление пользователями", content, display_name, role)
+        return page_layout("Управление пользователями", content, display_name, role, current_user.telegram_id if current_user else None)

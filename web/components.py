@@ -6,139 +6,95 @@ from fasthtml.common import *
 from bot.database.models import PaymentRequest, PaymentRequestStatus, User, UserRole
 
 
-def status_badge(status: PaymentRequestStatus) -> Div:
-    """Бейдж статуса запроса на оплату с улучшенным дизайном"""
+def status_badge(status: PaymentRequestStatus) -> Span:
+    """Бейдж статуса запроса на оплату"""
     status_config = {
-        PaymentRequestStatus.PENDING: ("⏳ Ожидает", "badge-warning", "font-semibold"),
-        PaymentRequestStatus.SCHEDULED_TODAY: ("🔜 Сегодня", "badge-info", "font-semibold"),
-        PaymentRequestStatus.SCHEDULED_DATE: ("📅 Запланировано", "badge-info", "font-semibold"),
-        PaymentRequestStatus.PAID: ("✅ Оплачено", "badge-success", "font-semibold"),
-        PaymentRequestStatus.CANCELLED: ("❌ Отменено", "badge-error", "font-semibold"),
+        PaymentRequestStatus.PENDING: ("⏳ Ожидает", "badge-warning"),
+        PaymentRequestStatus.SCHEDULED_TODAY: ("🔜 Сегодня", "badge-info"),
+        PaymentRequestStatus.SCHEDULED_DATE: ("📅 Запланировано", "badge-info"),
+        PaymentRequestStatus.PAID: ("✅ Оплачено", "badge-success"),
+        PaymentRequestStatus.CANCELLED: ("❌ Отменено", "badge-error"),
     }
 
     # Преобразуем строку в enum если нужно
     if isinstance(status, str):
         status = PaymentRequestStatus(status)
 
-    text, badge_class, font_class = status_config.get(status, ("Unknown", "badge-ghost", ""))
-    return Span(text, cls=f"badge {badge_class} {font_class} badge-lg")
+    text, badge_class = status_config.get(status, ("Unknown", "badge-ghost"))
+    return Span(text, cls=f"badge {badge_class}")
 
 
-def stat_card(title: str, value: str, icon: str = "📊", color: str = "bg-base-100", accent_color: str = "primary") -> Div:
-    """Карточка статистики с улучшенным дизайном"""
+def stat_card(title: str, value: str, icon: str = "📊") -> Div:
+    """Карточка статистики"""
     return Div(
         Div(
-            Div(
-                # Иконка в цветном круге
-                Div(
-                    Span(icon, cls="text-2xl"),
-                    cls=f"w-12 h-12 rounded-full bg-{accent_color} bg-opacity-10 flex items-center justify-center mb-3"
-                ),
-                # Значение
-                H2(value, cls="text-4xl font-bold mb-1"),
-                # Название
-                P(title, cls="text-sm text-gray-500 uppercase tracking-wide"),
-                cls="flex flex-col items-start"
-            ),
-            cls="card-body"
+            H2(value, cls="card-title text-2xl"),
+            P(f"{icon} {title}", cls="text-sm"),
+            cls="stat"
         ),
-        cls=f"card {color} shadow-lg hover:shadow-xl transition-shadow border border-gray-100"
+        cls="stats shadow"
     )
 
 
-def navbar(display_name: str, role: str) -> Div:
-    """Навигационная панель с улучшенным дизайном"""
-    # Определяем цвет роли
-    role_colors = {
-        "owner": "badge-error",
-        "manager": "badge-warning",
-        "worker": "badge-info"
-    }
-    role_badge_class = role_colors.get(role.lower(), "badge-ghost")
+def navbar(display_name: str, role: str, telegram_id: Optional[int] = None) -> Div:
+    """Навигационная панель с аватаром из Telegram"""
+    # Получаем фото профиля из Telegram если есть telegram_id
+    # Telegram позволяет получить аватар через userpic API
+    avatar_url = f"https://t.me/i/userpic/320/{telegram_id}.jpg" if telegram_id else None
 
     return Div(
         Div(
             # Логотип
             Div(
-                A(
-                    Span("💼", cls="text-2xl mr-2"),
-                    Span("YaTackerHelper", cls="font-bold text-xl"),
-                    href="/dashboard",
-                    cls="flex items-center hover:opacity-80 transition-opacity"
-                ),
+                A("Система учета расходов apod-lab", href="/dashboard", cls="btn btn-ghost text-xl"),
                 cls="flex-1"
             ),
-
             # Профиль
             Div(
                 Div(
-                    # Кнопка аватара
+                    # Аватар
                     Div(
                         tabindex="0",
                         role="button",
-                        cls="btn btn-ghost gap-2 hover:bg-gray-100"
+                        cls="btn btn-ghost btn-circle avatar"
                     )(
-                        Div(cls="avatar placeholder")(
-                            Div(cls="bg-primary text-primary-content rounded-full w-10")(
-                                Span(display_name[0] if display_name else "?", cls="text-lg font-bold")
+                        Div(cls="w-10 rounded-full")(
+                            Img(
+                                src=avatar_url if avatar_url else f"https://ui-avatars.com/api/?name={display_name}&background=random",
+                                alt=display_name
                             )
-                        ),
-                        Div(cls="flex flex-col items-start")(
-                            Span(display_name, cls="font-medium text-sm"),
-                            Span(role.upper(), cls=f"badge {role_badge_class} badge-xs")
                         )
                     ),
-
-                    # Выпадающее меню
+                    # Dropdown меню
                     Ul(
                         tabindex="0",
-                        cls="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow-lg bg-base-100 rounded-box w-52 border border-gray-200"
+                        cls="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow"
                     )(
-                        Li(cls="menu-title")(
-                            Span("Профиль")
-                        ),
                         Li()(
                             A(
-                                Span("👤 ", cls="mr-2"),
-                                display_name,
-                                cls="font-medium"
+                                f"👤 {display_name}",
+                                cls="justify-between"
+                            )(
+                                Span(role.upper(), cls="badge")
                             )
                         ),
-                        Li()(
-                            A(
-                                Span("🎭 ", cls="mr-2"),
-                                f"Роль: {role.upper()}"
-                            )
-                        ),
-                        Li(cls="border-t border-gray-200 mt-2 pt-2")(
-                            A(
-                                Span("🚪 ", cls="mr-2"),
-                                "Выйти",
-                                href="/logout",
-                                cls="text-error hover:bg-error hover:text-white"
-                            )
-                        )
+                        Li()(A("🚪 Выйти", href="/logout"))
                     ),
                     cls="dropdown dropdown-end"
                 ),
                 cls="flex-none"
             ),
-            cls="navbar bg-white shadow-md border-b border-gray-200 px-4 py-3"
+            cls="navbar bg-base-100"
         ),
     )
 
 
-def payment_request_row(request: PaymentRequest, show_creator: bool = False) -> Any:
-    """Строка таблицы запроса на оплату с улучшенным дизайном"""
+def payment_request_row(request: PaymentRequest, show_creator: bool = False) -> Tr:
+    """Строка таблицы запроса на оплату"""
     created_date = request.created_at.strftime("%d.%m.%Y %H:%M")
 
     # Формируем строку создателя если нужно
-    creator_cell = Td(
-        Div(
-            Span(request.created_by.display_name, cls="font-medium"),
-            cls="flex items-center"
-        )
-    ) if show_creator else None
+    creator_cell = Td(request.created_by.display_name) if show_creator else None
 
     # Формируем дату оплаты или планируемую дату
     date_info = ""
@@ -148,34 +104,16 @@ def payment_request_row(request: PaymentRequest, show_creator: bool = False) -> 
         date_info = request.scheduled_date.strftime("%d.%m.%Y")
 
     return Tr(
-        Td(
-            Span(f"#{request.id}", cls="badge badge-ghost badge-sm"),
-        ),
+        Th(str(request.id)),
         creator_cell,
-        Td(
-            Div(
-                Span(request.title, cls="font-medium text-gray-800"),
-                cls="max-w-xs truncate"
-            )
-        ),
-        Td(
-            Span(f"{request.amount} ₽", cls="font-bold text-lg")
-        ),
+        Td(request.title),
+        Td(f"{request.amount} ₽"),
         Td(status_badge(request.status)),
+        Td(created_date),
+        Td(date_info if date_info else "-"),
         Td(
-            Span(created_date, cls="text-sm text-gray-500")
-        ),
-        Td(
-            Span(date_info, cls="text-sm text-gray-500") if date_info else Span("-", cls="text-gray-400")
-        ),
-        Td(
-            A(
-                "👁️ Подробнее",
-                href=f"/payment/{request.id}",
-                cls="btn btn-sm btn-outline btn-primary hover:btn-primary"
-            )
-        ),
-        cls="hover:bg-gray-50 transition-colors"
+            A("Подробнее", href=f"/payment/{request.id}", cls="btn btn-xs btn-ghost")
+        )
     )
 
 
@@ -183,119 +121,86 @@ def payment_request_table(requests: List[PaymentRequest], show_creator: bool = F
     """Таблица запросов на оплату"""
     if not requests:
         return Div(
-            Div(
-                Div(
-                    Span("📭", cls="text-6xl mb-4"),
-                    H3("Нет запросов", cls="text-2xl font-bold text-gray-700 mb-2"),
-                    P("Здесь будут отображаться запросы на оплату", cls="text-gray-500"),
-                    cls="flex flex-col items-center py-12"
-                ),
-            ),
-            cls="card bg-base-100 shadow-lg border border-gray-100"
+            P("Нет запросов", cls="text-center py-8 text-gray-500")
         )
 
     # Заголовок с колонкой создателя если нужно
-    creator_header = Th("Создатель", cls="bg-gray-50") if show_creator else None
+    creator_header = Th("Создатель") if show_creator else None
 
     return Div(
-        Div(
-            Table(
-                Thead(
-                    Tr(
-                        Th("ID", cls="bg-gray-50"),
-                        creator_header,
-                        Th("Название", cls="bg-gray-50"),
-                        Th("Сумма", cls="bg-gray-50"),
-                        Th("Статус", cls="bg-gray-50"),
-                        Th("Создано", cls="bg-gray-50"),
-                        Th("Дата оплаты", cls="bg-gray-50"),
-                        Th("Действия", cls="bg-gray-50")
-                    )
-                ),
-                Tbody(
-                    *[payment_request_row(req, show_creator) for req in requests]
-                ),
-                cls="table table-lg"
+        Table(
+            Thead(
+                Tr(
+                    Th("ID"),
+                    creator_header,
+                    Th("Название"),
+                    Th("Сумма"),
+                    Th("Статус"),
+                    Th("Создано"),
+                    Th("Дата оплаты"),
+                    Th("Действия")
+                )
             ),
-            cls="overflow-x-auto"
+            Tbody(
+                *[payment_request_row(req, show_creator) for req in requests]
+            ),
+            cls="table table-xs"
         ),
-        cls="card bg-base-100 shadow-lg border border-gray-100"
+        cls="overflow-x-auto"
     )
 
 
 def create_payment_form() -> Div:
-    """Форма создания запроса на оплату с улучшенным дизайном"""
-    return Div(
+    """Форма создания запроса на оплату"""
+    return Form(
+        # Название
         Div(
-            Form(
-                Div(
-                    Span("💰", cls="text-3xl"),
-                    H2("Создать запрос на оплату", cls="text-2xl font-bold"),
-                    cls="flex items-center gap-3 mb-6"
-                ),
-
-                # Название
-                Div(
-                    Label(
-                        Span("Название для плательщика", cls="label-text font-medium"),
-                        cls="label"
-                    ),
-                    Input(
-                        type_="text",
-                        name="title",
-                        placeholder="Например: Оплата за услуги разработки",
-                        required=True,
-                        cls="input input-bordered w-full focus:input-primary"
-                    ),
-                    cls="form-control mb-4"
-                ),
-
-                # Сумма
-                Div(
-                    Label(
-                        Span("Сумма (₽)", cls="label-text font-medium"),
-                        cls="label"
-                    ),
-                    Input(
-                        type_="text",
-                        name="amount",
-                        placeholder="50000",
-                        required=True,
-                        cls="input input-bordered w-full focus:input-primary"
-                    ),
-                    cls="form-control mb-4"
-                ),
-
-                # Комментарий
-                Div(
-                    Label(
-                        Span("Комментарий", cls="label-text font-medium"),
-                        cls="label"
-                    ),
-                    Textarea(
-                        name="comment",
-                        placeholder="Опишите детали платежа: за что, за какой период, дополнительные условия...",
-                        required=True,
-                        rows=4,
-                        cls="textarea textarea-bordered w-full focus:textarea-primary"
-                    ),
-                    cls="form-control mb-6"
-                ),
-
-                # Кнопка отправки
-                Button(
-                    Span("✅ ", cls="mr-2"),
-                    "Создать запрос",
-                    type_="submit",
-                    cls="btn btn-primary btn-lg w-full"
-                ),
-
-                method="POST",
-                action="/payment/create",
-                cls="card-body"
+            Label("Название для плательщика", cls="label"),
+            Input(
+                type_="text",
+                name="title",
+                placeholder="Например: Оплата за услуги",
+                required=True,
+                cls="input input-bordered w-full"
             ),
-            cls="card bg-base-100 shadow-lg border border-gray-100"
+            cls="form-control"
         ),
+
+        # Сумма
+        Div(
+            Label("Сумма (₽)", cls="label"),
+            Input(
+                type_="text",
+                name="amount",
+                placeholder="50000",
+                required=True,
+                cls="input input-bordered w-full"
+            ),
+            cls="form-control"
+        ),
+
+        # Комментарий
+        Div(
+            Label("Комментарий", cls="label"),
+            Textarea(
+                name="comment",
+                placeholder="Дополнительная информация о платеже...",
+                required=True,
+                rows=3,
+                cls="textarea textarea-bordered w-full"
+            ),
+            cls="form-control"
+        ),
+
+        # Кнопка отправки
+        Button(
+            "Создать запрос",
+            type_="submit",
+            cls="btn btn-primary w-full mt-4"
+        ),
+
+        method="POST",
+        action="/payment/create"
     )
 
 
@@ -361,25 +266,19 @@ def user_table(users: List[User]) -> Div:
     )
 
 
-def page_layout(title: str, content: Any, user_name: str, role: str) -> Html:
-    """Общий layout для страниц дашборда с улучшенным дизайном"""
+def page_layout(title: str, content: Any, user_name: str, role: str, telegram_id: Optional[int] = None) -> Html:
+    """Общий layout для страниц дашборда"""
     return Html(
         Head(
-            Title(f"{title} - YaTackerHelper"),
+            Title(f"{title} - Система учета расходов apod-lab"),
             Meta(charset="utf-8"),
             Meta(name="viewport", content="width=device-width, initial-scale=1"),
         ),
         Body(
-            # Навбар
-            navbar(user_name, role),
-
-            # Основной контент с фоном
+            navbar(user_name, role, telegram_id),
             Div(
-                Div(
-                    content,
-                    cls="container mx-auto px-4 py-8 max-w-7xl"
-                ),
-                cls="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100"
+                content,
+                cls="container mx-auto p-4"
             ),
             data_theme="light"
         )
@@ -387,37 +286,24 @@ def page_layout(title: str, content: Any, user_name: str, role: str) -> Html:
 
 
 def filter_tabs(current_filter: str = "all") -> Div:
-    """Вкладки фильтра статусов с улучшенным дизайном"""
+    """Фильтры статусов"""
     tabs = [
-        ("all", "🔍 Все", "primary"),
-        ("pending", "⏳ Ожидает", "warning"),
-        ("scheduled", "📅 Запланировано", "info"),
-        ("paid", "✅ Оплачено", "success"),
-        ("cancelled", "❌ Отменено", "error"),
+        ("all", "Все"),
+        ("pending", "Ожидает"),
+        ("scheduled", "Запланировано"),
+        ("paid", "Оплачено"),
+        ("cancelled", "Отменено"),
     ]
 
     tab_items = []
-    for tab_id, tab_label, color in tabs:
+    for tab_id, tab_label in tabs:
         if tab_id == current_filter:
             tab_items.append(
-                A(
-                    tab_label,
-                    href=f"/dashboard?filter={tab_id}",
-                    cls=f"btn btn-{color} btn-sm"
-                )
+                A(tab_label, href=f"/dashboard?filter={tab_id}", cls="btn btn-primary btn-sm")
             )
         else:
             tab_items.append(
-                A(
-                    tab_label,
-                    href=f"/dashboard?filter={tab_id}",
-                    cls=f"btn btn-outline btn-{color} btn-sm"
-                )
+                A(tab_label, href=f"/dashboard?filter={tab_id}", cls="btn btn-ghost btn-sm")
             )
 
-    return Div(
-        Div(
-            *tab_items,
-            cls="flex flex-wrap gap-2 mb-6"
-        ),
-    )
+    return Div(*tab_items, cls="flex gap-2")
