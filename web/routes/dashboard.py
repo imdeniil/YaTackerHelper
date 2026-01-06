@@ -96,24 +96,33 @@ def setup_dashboard_routes(app, config: WebConfig):
         pending_count = len([r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value])
 
         content = Div(
-            H1(f"👋 Добро пожаловать, {user.display_name}!", cls="text-3xl font-bold mb-6"),
+            # Приветствие
+            Div(
+                H1(f"Добро пожаловать, {user.display_name}!", cls="text-4xl font-bold mb-2"),
+                P("Управляйте своими запросами на оплату", cls="text-gray-600 text-lg mb-8"),
+            ),
 
             # Статистика
             Div(
-                stat_card("Всего запросов", str(len(all_requests)), "📊"),
-                stat_card("Ожидает оплаты", str(pending_count), "⏳"),
-                stat_card("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
-                cls="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6"
+                stat_card("Всего запросов", str(len(all_requests)), "📊", "bg-white", "primary"),
+                stat_card("Ожидает оплаты", str(pending_count), "⏳", "bg-white", "warning"),
+                stat_card("Оплачено всего", f"{total_amount:,.0f} ₽", "💰", "bg-white", "success"),
+                cls="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
             ),
 
             # Форма создания
-            H2("💰 Создать новый запрос", cls="text-2xl font-bold mb-4"),
-            create_payment_form(),
+            Div(
+                H2("Создать новый запрос", cls="text-2xl font-bold mb-4"),
+                create_payment_form(),
+                cls="mb-8"
+            ),
 
             # Список запросов
-            H2("📋 Мои запросы", cls="text-2xl font-bold mt-8 mb-4"),
-            filter_tabs(filter_status),
-            payment_request_table(requests, show_creator=False)
+            Div(
+                H2("Мои запросы", cls="text-2xl font-bold mb-4"),
+                filter_tabs(filter_status),
+                payment_request_table(requests, show_creator=False)
+            )
         )
 
         return page_layout("Worker Dashboard", content, user.display_name, user.role.value)
@@ -146,32 +155,36 @@ def setup_dashboard_routes(app, config: WebConfig):
             PaymentRequestStatus.SCHEDULED_DATE.value
         ]])
 
-        # Кнопка управления пользователями для Owner
-        manage_users_btn = None
-        if role == UserRole.OWNER.value:
-            manage_users_btn = Div(
-                A("👥 Управление пользователями", href="/users", cls="btn btn-outline btn-primary"),
-                cls="mb-6"
-            )
-
         content = Div(
-            H1(f"👋 Добро пожаловать, {user.display_name}!", cls="text-3xl font-bold mb-6"),
-
-            manage_users_btn,
+            # Приветствие и кнопка управления
+            Div(
+                Div(
+                    H1(f"Добро пожаловать, {user.display_name}!", cls="text-4xl font-bold mb-2"),
+                    P("Полный контроль над всеми запросами на оплату", cls="text-gray-600 text-lg"),
+                ),
+                A(
+                    "👥 Управление пользователями",
+                    href="/users",
+                    cls="btn btn-outline btn-primary btn-lg"
+                ) if role == UserRole.OWNER.value else None,
+                cls="flex justify-between items-start mb-8"
+            ),
 
             # Статистика
             Div(
-                stat_card("Всего запросов", str(len(all_requests)), "📊"),
-                stat_card("Ожидает оплаты", str(pending_count), "⏳"),
-                stat_card("Запланировано", str(scheduled_count), "📅"),
-                stat_card("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
-                cls="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6"
+                stat_card("Всего запросов", str(len(all_requests)), "📊", "bg-white", "primary"),
+                stat_card("Ожидает оплаты", str(pending_count), "⏳", "bg-white", "warning"),
+                stat_card("Запланировано", str(scheduled_count), "📅", "bg-white", "info"),
+                stat_card("Оплачено всего", f"{total_amount:,.0f} ₽", "💰", "bg-white", "success"),
+                cls="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
             ),
 
             # Список всех запросов
-            H2("📋 Все запросы на оплату", cls="text-2xl font-bold mb-4"),
-            filter_tabs(filter_status),
-            payment_request_table(requests, show_creator=True)
+            Div(
+                H2("Все запросы на оплату", cls="text-2xl font-bold mb-4"),
+                filter_tabs(filter_status),
+                payment_request_table(requests, show_creator=True)
+            )
         )
 
         return page_layout(f"{role.upper()} Dashboard", content, user.display_name, user.role.value)
