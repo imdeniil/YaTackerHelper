@@ -99,15 +99,12 @@ def setup_dashboard_routes(app, config: WebConfig):
             # Статистика в card
             Div(
                 Div(
-                    Div(
-                        stat_item("Всего запросов", str(len(all_requests)), "📊"),
-                        stat_item("Ожидает оплаты", str(pending_count), "⏳"),
-                        stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
-                        cls="stats stats-vertical lg:stats-horizontal shadow w-full"
-                    ),
-                    cls="card-body"
+                    stat_item("Всего запросов", str(len(all_requests)), "📊"),
+                    stat_item("Ожидает оплаты", str(pending_count), "⏳"),
+                    stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
+                    cls="stats stats-vertical lg:stats-horizontal shadow w-full"
                 ),
-                cls="card bg-base-100 shadow-xl mb-4"
+                cls="mb-4"
             ),
 
             # Фильтры в card
@@ -116,11 +113,17 @@ def setup_dashboard_routes(app, config: WebConfig):
                     filter_tabs(filter_status),
                     cls="card-body"
                 ),
-                cls="card bg-base-100 shadow-xl mb-4"
+                cls="card bg-base-100 shadow-xl mb-4 w-full"
             ),
 
-            # Таблица
-            payment_request_table(requests, show_creator=False),
+            # Таблица в card
+            Div(
+                Div(
+                    payment_request_table(requests, show_creator=False),
+                    cls="card-body p-0"
+                ),
+                cls="card bg-base-100 shadow-xl mb-4 w-full"
+            ),
 
             # Форма создания
             Div(
@@ -129,7 +132,7 @@ def setup_dashboard_routes(app, config: WebConfig):
                     create_payment_form(),
                     cls="card-body"
                 ),
-                cls="card bg-base-100 shadow-xl mt-4"
+                cls="card bg-base-100 shadow-xl w-full"
             )
         )
 
@@ -174,19 +177,13 @@ def setup_dashboard_routes(app, config: WebConfig):
                 cls="mb-4 flex justify-end"
             ) if role == UserRole.OWNER.value else None,
 
-            # Статистика в card
+            # Статистика
             Div(
-                Div(
-                    Div(
-                        stat_item("Всего запросов", str(len(all_requests)), "📊"),
-                        stat_item("Ожидает оплаты", str(pending_count), "⏳"),
-                        stat_item("Запланировано", str(scheduled_count), "📅"),
-                        stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
-                        cls="stats stats-vertical lg:stats-horizontal shadow w-full"
-                    ),
-                    cls="card-body"
-                ),
-                cls="card bg-base-100 shadow-xl mb-4"
+                stat_item("Всего запросов", str(len(all_requests)), "📊"),
+                stat_item("Ожидает оплаты", str(pending_count), "⏳"),
+                stat_item("Запланировано", str(scheduled_count), "📅"),
+                stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
+                cls="stats stats-vertical lg:stats-horizontal shadow w-full mb-4"
             ),
 
             # Фильтры в card
@@ -195,11 +192,17 @@ def setup_dashboard_routes(app, config: WebConfig):
                     filter_tabs(filter_status),
                     cls="card-body"
                 ),
-                cls="card bg-base-100 shadow-xl mb-4"
+                cls="card bg-base-100 shadow-xl mb-4 w-full"
             ),
 
-            # Таблица
-            payment_request_table(requests, show_creator=True)
+            # Таблица в card
+            Div(
+                Div(
+                    payment_request_table(requests, show_creator=True),
+                    cls="card-body p-0"
+                ),
+                cls="card bg-base-100 shadow-xl w-full"
+            )
         )
 
         return page_layout(f"{role.upper()} Dashboard", content, user.display_name, user.role.value, user.telegram_id)
