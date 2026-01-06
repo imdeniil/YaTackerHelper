@@ -33,11 +33,8 @@ def stat_item(title: str, value: str, icon: str = "📊") -> Div:
     )
 
 
-def navbar(display_name: str, role: str, telegram_id: Optional[int] = None) -> Div:
+def navbar(display_name: str, role: str, avatar_url: str) -> Div:
     """Навигационная панель с аватаром из Telegram"""
-    # Получаем фото профиля из Telegram если есть telegram_id
-    avatar_url = f"https://ui-avatars.com/api/?name={display_name}&background=random"
-
     # Пункты меню в зависимости от роли
     menu_items = [
         A("Главная", href="/dashboard", cls="btn btn-ghost")
@@ -51,15 +48,10 @@ def navbar(display_name: str, role: str, telegram_id: Optional[int] = None) -> D
 
     return Div(
         Div(
-            # Логотип
-            Div(
-                A("Система учета расходов apod-lab", href="/dashboard", cls="btn btn-ghost text-xl"),
-                cls="flex-1"
-            ),
-            # Меню
+            # Меню по левому краю
             Div(
                 *menu_items,
-                cls="flex-none hidden lg:flex gap-2"
+                cls="flex-1 gap-2"
             ),
             # Профиль
             Div(
@@ -260,7 +252,7 @@ def user_table(users: List[User]) -> Div:
     )
 
 
-def page_layout(title: str, content: Any, user_name: str, role: str, telegram_id: Optional[int] = None) -> Html:
+def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url: str) -> Html:
     """Общий layout для страниц дашборда"""
     return Html(
         Head(
@@ -271,7 +263,7 @@ def page_layout(title: str, content: Any, user_name: str, role: str, telegram_id
             Link(href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css", rel="stylesheet", type_="text/css"),
         ),
         Body(
-            navbar(user_name, role, telegram_id),
+            navbar(user_name, role, avatar_url),
             Main(
                 content,
                 cls="container mx-auto px-4 py-8"

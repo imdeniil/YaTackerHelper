@@ -10,6 +10,7 @@ from web.components import (
     create_payment_form, filter_tabs, user_table, card,
     payment_request_detail, user_edit_form, user_create_form
 )
+from web.telegram_utils import get_user_profile_photo_url, get_fallback_avatar_url
 from bot.database.models import UserRole, PaymentRequestStatus
 
 logger = logging.getLogger(__name__)
@@ -65,14 +66,14 @@ def setup_dashboard_routes(app, config: WebConfig):
 
             # Роутинг по ролям
             if role == UserRole.WORKER.value:
-                return await worker_dashboard(session, user, filter)
+                return await worker_dashboard(session, user, filter, config.bot_token)
             elif role in [UserRole.OWNER.value, UserRole.MANAGER.value]:
-                return await owner_dashboard(session, user, role, filter)
+                return await owner_dashboard(session, user, role, filter, config.bot_token)
 
         # Fallback
         return RedirectResponse('/login', status_code=303)
 
-    async def worker_dashboard(session, user, filter_status):
+    async def worker_dashboard(session, user, filter_status, bot_token):
         """Dashboard для Worker - создание и просмотр своих запросов"""
         # Получаем все запросы пользователя
         all_requests = await PaymentRequestCRUD.get_user_payment_requests(session, user.id)
@@ -121,9 +122,14 @@ def setup_dashboard_routes(app, config: WebConfig):
             card("Создать новый запрос", create_payment_form())
         )
 
-        return page_layout("Worker Dashboard", content, user.display_name, user.role.value, user.telegram_id)
+        # Получаем аватар из Telegram
+        avatar_url = await get_user_profile_photo_url(bot_token, user.telegram_id)
+        if not avatar_url:
+            avatar_url = get_fallback_avatar_url(user.display_name)
 
-    async def owner_dashboard(session, user, role, filter_status):
+        return page_layout("Worker Dashboard", content, user.display_name, user.role.value, avatar_url)
+
+    async def owner_dashboard(session, user, role, filter_status, bot_token):
         """Dashboard для Owner/Manager - просмотр всех запросов и статистика"""
         # Получаем все запросы системы
         all_requests = await PaymentRequestCRUD.get_all_payment_requests(session)
@@ -174,7 +180,12 @@ def setup_dashboard_routes(app, config: WebConfig):
             )
         )
 
-        return page_layout(f"{role.upper()} Dashboard", content, user.display_name, user.role.value, user.telegram_id)
+        # Получаем аватар из Telegram
+        avatar_url = await get_user_profile_photo_url(bot_token, user.telegram_id)
+        if not avatar_url:
+            avatar_url = get_fallback_avatar_url(user.display_name)
+
+        return page_layout(f"{role.upper()} Dashboard", content, user.display_name, user.role.value, avatar_url)
 
     @app.post("/payment/create")
     @require_auth
@@ -226,7 +237,12 @@ def setup_dashboard_routes(app, config: WebConfig):
             )
         )
 
-        return page_layout("Управление пользователями", content, display_name, role, current_user.telegram_id if current_user else None)
+        # Получаем аватар из Telegram
+        avatar_url = await get_user_profile_photo_url(config.bot_token, current_user.telegram_id) if current_user else None
+        if not avatar_url:
+            avatar_url = get_fallback_avatar_url(display_name)
+
+        return page_layout("Управление пользователями", content, display_name, role, avatar_url)
 
     @app.get("/payment/{request_id}")
     @require_auth
@@ -249,12 +265,17 @@ def setup_dashboard_routes(app, config: WebConfig):
 
         content = payment_request_detail(payment_request, role)
 
+        # Получаем аватар из Telegram
+        avatar_url = await get_user_profile_photo_url(config.bot_token, current_user.telegram_id) if current_user else None
+        if not avatar_url:
+            avatar_url = get_fallback_avatar_url(display_name)
+
         return page_layout(
             f"Запрос на оплату #{request_id}",
             content,
             display_name,
             role,
-            current_user.telegram_id if current_user else None
+            avatar_url
         )
 
     @app.post("/payment/{request_id}/schedule")
@@ -352,12 +373,17 @@ def setup_dashboard_routes(app, config: WebConfig):
             card(f"Редактирование пользователя: {user_to_edit.display_name}", user_edit_form(user_to_edit))
         )
 
+        # Получаем аватар из Telegram
+        avatar_url = await get_user_profile_photo_url(config.bot_token, current_user.telegram_id) if current_user else None
+        if not avatar_url:
+            avatar_url = get_fallback_avatar_url(display_name)
+
         return page_layout(
             "Редактирование пользователя",
             content,
             display_name,
             role,
-            current_user.telegram_id if current_user else None
+            avatar_url
         )
 
     @app.post("/users/{user_id}/edit")
@@ -408,12 +434,17 @@ def setup_dashboard_routes(app, config: WebConfig):
             card("Создание нового пользователя", user_create_form())
         )
 
+        # Получаем аватар из Telegram
+        avatar_url = await get_user_profile_photo_url(config.bot_token, current_user.telegram_id) if current_user else None
+        if not avatar_url:
+            avatar_url = get_fallback_avatar_url(display_name)
+
         return page_layout(
             "Создание пользователя",
             content,
             display_name,
             role,
-            current_user.telegram_id if current_user else None
+            avatar_url
         )
 
     @app.post("/users/create")
