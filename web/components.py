@@ -24,15 +24,12 @@ def status_badge(status: PaymentRequestStatus) -> Span:
     return Span(text, cls=f"badge {badge_class}")
 
 
-def stat_card(title: str, value: str, icon: str = "📊") -> Div:
-    """Карточка статистики"""
+def stat_item(title: str, value: str, icon: str = "📊") -> Div:
+    """Элемент статистики для stats контейнера"""
     return Div(
-        Div(
-            H2(value, cls="card-title text-2xl"),
-            P(f"{icon} {title}", cls="text-sm"),
-            cls="stat"
-        ),
-        cls="stats shadow"
+        Div(f"{icon} {title}", cls="stat-title"),
+        Div(value, cls="stat-value"),
+        cls="stat"
     )
 
 
@@ -150,7 +147,7 @@ def payment_request_table(requests: List[PaymentRequest], show_creator: bool = F
     )
 
 
-def create_payment_form() -> Div:
+def create_payment_form() -> Form:
     """Форма создания запроса на оплату"""
     return Form(
         # Название

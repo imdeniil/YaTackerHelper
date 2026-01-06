@@ -6,7 +6,7 @@ from fasthtml.common import *
 from web.database import get_session, UserCRUD, PaymentRequestCRUD
 from web.config import WebConfig
 from web.components import (
-    page_layout, stat_card, payment_request_table,
+    page_layout, stat_item, payment_request_table,
     create_payment_form, filter_tabs, user_table
 )
 from bot.database.models import UserRole, PaymentRequestStatus
@@ -100,14 +100,14 @@ def setup_dashboard_routes(app, config: WebConfig):
             Div(
                 Div(
                     Div(
-                        stat_card("Всего запросов", str(len(all_requests)), "📊"),
-                        stat_card("Ожидает оплаты", str(pending_count), "⏳"),
-                        stat_card("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
-                        cls="stats stats-vertical lg:stats-horizontal w-full"
+                        stat_item("Всего запросов", str(len(all_requests)), "📊"),
+                        stat_item("Ожидает оплаты", str(pending_count), "⏳"),
+                        stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
+                        cls="stats stats-vertical lg:stats-horizontal shadow w-full"
                     ),
                     cls="card-body"
                 ),
-                cls="card bg-base-100 shadow-sm mb-4"
+                cls="card bg-base-100 shadow-xl mb-4"
             ),
 
             # Фильтры в card
@@ -116,7 +116,7 @@ def setup_dashboard_routes(app, config: WebConfig):
                     filter_tabs(filter_status),
                     cls="card-body"
                 ),
-                cls="card bg-base-100 shadow-sm mb-4"
+                cls="card bg-base-100 shadow-xl mb-4"
             ),
 
             # Таблица
@@ -129,7 +129,7 @@ def setup_dashboard_routes(app, config: WebConfig):
                     create_payment_form(),
                     cls="card-body"
                 ),
-                cls="card bg-base-100 shadow-sm mt-4"
+                cls="card bg-base-100 shadow-xl mt-4"
             )
         )
 
@@ -178,15 +178,15 @@ def setup_dashboard_routes(app, config: WebConfig):
             Div(
                 Div(
                     Div(
-                        stat_card("Всего запросов", str(len(all_requests)), "📊"),
-                        stat_card("Ожидает оплаты", str(pending_count), "⏳"),
-                        stat_card("Запланировано", str(scheduled_count), "📅"),
-                        stat_card("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
-                        cls="stats stats-vertical lg:stats-horizontal w-full"
+                        stat_item("Всего запросов", str(len(all_requests)), "📊"),
+                        stat_item("Ожидает оплаты", str(pending_count), "⏳"),
+                        stat_item("Запланировано", str(scheduled_count), "📅"),
+                        stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
+                        cls="stats stats-vertical lg:stats-horizontal shadow w-full"
                     ),
                     cls="card-body"
                 ),
-                cls="card bg-base-100 shadow-sm mb-4"
+                cls="card bg-base-100 shadow-xl mb-4"
             ),
 
             # Фильтры в card
@@ -195,7 +195,7 @@ def setup_dashboard_routes(app, config: WebConfig):
                     filter_tabs(filter_status),
                     cls="card-body"
                 ),
-                cls="card bg-base-100 shadow-sm mb-4"
+                cls="card bg-base-100 shadow-xl mb-4"
             ),
 
             # Таблица
