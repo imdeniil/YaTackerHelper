@@ -129,7 +129,8 @@ def payment_request_table(requests: List[PaymentRequest], show_creator: bool = F
     """Таблица запросов на оплату с пагинацией"""
     if not requests:
         return Div(
-            P("Нет запросов", cls="text-center py-8 text-gray-500")
+            P("Нет запросов", cls="text-center py-8 text-gray-500"),
+            id="table-container"
         )
 
     # Заголовок с колонкой создателя если нужно
