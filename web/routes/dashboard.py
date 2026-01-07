@@ -129,7 +129,7 @@ def setup_dashboard_routes(app, config: WebConfig):
             Div(
                 Div(
                     payment_request_table(requests, show_creator=False, pagination_data=pagination_data),
-                    cls="card-body p-0"
+                    cls="card-body p-3"
                 ),
                 cls="card bg-base-100 shadow-xl my-4"
             ),
@@ -201,7 +201,7 @@ def setup_dashboard_routes(app, config: WebConfig):
             Div(
                 Div(
                     payment_request_table(requests, show_creator=True, pagination_data=pagination_data),
-                    cls="card-body p-0"
+                    cls="card-body p-3"
                 ),
                 cls="card bg-base-100 shadow-xl my-4"
             )
