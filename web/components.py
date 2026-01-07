@@ -306,6 +306,27 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
             ),
             # Инициализация Flatpickr для календарей и обновление счетчика статусов
             Script("""
+                // Функция переключения типа даты
+                function switchDateType(type) {
+                    // Обновляем скрытое поле
+                    const dateTypeInput = document.getElementById('date-type-input');
+                    if (dateTypeInput) {
+                        dateTypeInput.value = type;
+                    }
+
+                    // Переключаем активные классы табов
+                    const allTabs = document.querySelectorAll('.date-type-tab');
+                    allTabs.forEach(tab => {
+                        if (tab.getAttribute('data-date-type') === type) {
+                            tab.classList.remove('btn-ghost');
+                            tab.classList.add('btn-primary');
+                        } else {
+                            tab.classList.remove('btn-primary');
+                            tab.classList.add('btn-ghost');
+                        }
+                    });
+                }
+
                 // Функция обновления счетчика выбранных статусов
                 function updateStatusCount() {
                     const checkboxes = document.querySelectorAll('input[name="status"]:checked');
@@ -395,15 +416,22 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                             tableContainer.innerHTML = newTableContainer.innerHTML;
                         }
 
-                        // Обновляем скрытое поле per_page из URL
+                        // Обновляем скрытое поле per_page из URL ПОСЛЕ замены HTML
                         const urlParams = new URLSearchParams(url.split('?')[1]);
                         const perPageInput = document.getElementById('per-page-input');
+
+                        // per_page_selector теперь новый элемент после замены innerHTML
                         const perPageSelector = document.getElementById('per-page-selector');
+
                         if (perPageInput && urlParams.has('per_page')) {
                             perPageInput.value = urlParams.get('per_page');
                         }
-                        if (perPageSelector && urlParams.has('per_page')) {
-                            perPageSelector.value = urlParams.get('per_page');
+
+                        // Устанавливаем значение для нового selector
+                        if (perPageSelector) {
+                            const perPageValue = urlParams.get('per_page') || '20';
+                            perPageSelector.value = perPageValue;
+                            console.log('Updated per_page selector to:', perPageValue);
                         }
 
                         // Убираем индикатор загрузки
@@ -429,6 +457,16 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                     for (const [key, value] of formData.entries()) {
                         if (value && value.trim() !== '') {
                             params.append(key, value);
+                        }
+                    }
+
+                    // Убедимся что per_page всегда передается
+                    if (!params.has('per_page')) {
+                        const perPageInput = document.getElementById('per-page-input');
+                        if (perPageInput && perPageInput.value) {
+                            params.set('per_page', perPageInput.value);
+                        } else {
+                            params.set('per_page', '20'); // Дефолтное значение
                         }
                     }
 
@@ -486,6 +524,12 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
 
                 // Обработчик изменения количества записей на странице
                 function handlePerPageChange(perPage) {
+                    // Обновляем скрытое поле в форме
+                    const perPageInput = document.getElementById('per-page-input');
+                    if (perPageInput) {
+                        perPageInput.value = perPage;
+                    }
+
                     // Получаем текущие параметры формы
                     const form = document.getElementById('filters-form');
                     const formData = new FormData(form);
@@ -501,6 +545,8 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                     // Устанавливаем новое значение per_page и сбрасываем на первую страницу
                     params.set('per_page', perPage);
                     params.set('page', '1');
+
+                    console.log('handlePerPageChange - URL:', '/dashboard?' + params.toString());
 
                     const url = '/dashboard?' + params.toString();
                     updateTable(url);
@@ -628,6 +674,7 @@ def advanced_filters(
     search_query: str = "",
     date_from: str = "",
     date_to: str = "",
+    date_type: str = "created",
     amount_min: str = "",
     amount_max: str = "",
     creator_id: int = None,
@@ -791,30 +838,50 @@ def advanced_filters(
                 cls="form-control"
             ),
 
-            # Центральная колонка - Период (два календаря)
+            # Центральная колонка - Период (два календаря с табами)
             Div(
+                # Табы для выбора типа даты
+                Div(
+                    Button(
+                        "Дата создания",
+                        type="button",
+                        cls=f"btn btn-xs {'btn-primary' if date_type == 'created' else 'btn-ghost'} date-type-tab",
+                        data_date_type="created",
+                        id="tab-created",
+                        onclick="switchDateType('created')"
+                    ),
+                    Button(
+                        "Дата оплаты",
+                        type="button",
+                        cls=f"btn btn-xs {'btn-primary' if date_type == 'paid' else 'btn-ghost'} date-type-tab",
+                        data_date_type="paid",
+                        id="tab-paid",
+                        onclick="switchDateType('paid')"
+                    ),
+                    cls="btn-group mb-2 w-full"
+                ),
+                # Поля дат в одну строку
                 Div(
                     Input(
                         type="text",
                         name="date_from",
                         id="date_from_picker",
                         value=date_from,
-                        placeholder="📅 Дата от",
-                        cls="input input-sm input-bordered w-full"
+                        placeholder="📅 От",
+                        cls="input input-sm input-bordered flex-1"
                     ),
-                    cls="form-control mb-2"
-                ),
-                Div(
                     Input(
                         type="text",
                         name="date_to",
                         id="date_to_picker",
                         value=date_to,
-                        placeholder="📅 Дата до",
-                        cls="input input-sm input-bordered w-full"
+                        placeholder="📅 До",
+                        cls="input input-sm input-bordered flex-1"
                     ),
-                    cls="form-control"
+                    cls="flex gap-2"
                 ),
+                # Скрытое поле для типа даты
+                Input(type="hidden", name="date_type", value=date_type, id="date-type-input"),
                 cls="form-control"
             ),
 

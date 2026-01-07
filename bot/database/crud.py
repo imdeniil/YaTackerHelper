@@ -653,6 +653,7 @@ class PaymentRequestCRUD:
         search_query: Optional[str] = None,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
+        date_type: str = "created",
         amount_min: Optional[float] = None,
         amount_max: Optional[float] = None,
         creator_id: Optional[int] = None,
@@ -729,11 +730,13 @@ class PaymentRequestCRUD:
                 (PaymentRequest.comment.ilike(search_pattern))
             )
 
-        # Фильтр по диапазону дат
+        # Фильтр по диапазону дат (в зависимости от date_type)
+        date_field = PaymentRequest.created_at if date_type == "created" else PaymentRequest.paid_at
+
         if date_from:
             try:
                 date_from_obj = datetime.strptime(date_from, "%Y-%m-%d")
-                query = query.where(PaymentRequest.created_at >= date_from_obj)
+                query = query.where(date_field >= date_from_obj)
             except ValueError:
                 pass  # Игнорируем некорректную дату
 
@@ -742,7 +745,7 @@ class PaymentRequestCRUD:
                 date_to_obj = datetime.strptime(date_to, "%Y-%m-%d")
                 # Добавляем 1 день чтобы включить весь день
                 date_to_obj = date_to_obj.replace(hour=23, minute=59, second=59, microsecond=999999)
-                query = query.where(PaymentRequest.created_at <= date_to_obj)
+                query = query.where(date_field <= date_to_obj)
             except ValueError:
                 pass  # Игнорируем некорректную дату
 
@@ -775,6 +778,7 @@ class PaymentRequestCRUD:
         search_query: Optional[str] = None,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
+        date_type: str = "created",
         amount_min: Optional[float] = None,
         amount_max: Optional[float] = None,
         creator_id: Optional[int] = None,
@@ -830,11 +834,13 @@ class PaymentRequestCRUD:
                 (PaymentRequest.comment.ilike(search_pattern))
             )
 
-        # Фильтр по диапазону дат
+        # Фильтр по диапазону дат (в зависимости от date_type)
+        date_field = PaymentRequest.created_at if date_type == "created" else PaymentRequest.paid_at
+
         if date_from:
             try:
                 date_from_obj = datetime.strptime(date_from, "%Y-%m-%d")
-                query = query.where(PaymentRequest.created_at >= date_from_obj)
+                query = query.where(date_field >= date_from_obj)
             except ValueError:
                 pass  # Игнорируем некорректную дату
 
@@ -843,7 +849,7 @@ class PaymentRequestCRUD:
                 date_to_obj = datetime.strptime(date_to, "%Y-%m-%d")
                 # Добавляем 1 день чтобы включить весь день
                 date_to_obj = date_to_obj.replace(hour=23, minute=59, second=59, microsecond=999999)
-                query = query.where(PaymentRequest.created_at <= date_to_obj)
+                query = query.where(date_field <= date_to_obj)
             except ValueError:
                 pass  # Игнорируем некорректную дату
 

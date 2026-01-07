@@ -58,6 +58,7 @@ def setup_dashboard_routes(app, config: WebConfig):
         search: str = "",
         date_from: str = "",
         date_to: str = "",
+        date_type: str = "created",
         amount_min: str = "",
         amount_max: str = "",
         creator_id: int = None,
@@ -100,12 +101,12 @@ def setup_dashboard_routes(app, config: WebConfig):
             # Роутинг по ролям
             if role == UserRole.WORKER.value:
                 return await worker_dashboard(
-                    session, user, statuses, search, date_from, date_to,
+                    session, user, statuses, search, date_from, date_to, date_type,
                     amount_min_float, amount_max_float, page, per_page, config.bot_token
                 )
             elif role in [UserRole.OWNER.value, UserRole.MANAGER.value]:
                 return await owner_dashboard(
-                    session, user, role, statuses, search, date_from, date_to,
+                    session, user, role, statuses, search, date_from, date_to, date_type,
                     amount_min_float, amount_max_float, creator_id, page, per_page, config.bot_token
                 )
 
@@ -113,7 +114,7 @@ def setup_dashboard_routes(app, config: WebConfig):
         return RedirectResponse('/login', status_code=303)
 
     async def worker_dashboard(
-        session, user, statuses, search, date_from, date_to,
+        session, user, statuses, search, date_from, date_to, date_type,
         amount_min, amount_max, page, per_page, bot_token
     ):
         """Dashboard для Worker - создание и просмотр своих запросов"""
@@ -125,6 +126,7 @@ def setup_dashboard_routes(app, config: WebConfig):
             search_query=search if search else None,
             date_from=date_from if date_from else None,
             date_to=date_to if date_to else None,
+            date_type=date_type,
             amount_min=amount_min,
             amount_max=amount_max
         )
@@ -141,6 +143,7 @@ def setup_dashboard_routes(app, config: WebConfig):
             search_query=search if search else None,
             date_from=date_from if date_from else None,
             date_to=date_to if date_to else None,
+            date_type=date_type,
             amount_min=amount_min,
             amount_max=amount_max,
             skip=skip,
@@ -180,6 +183,7 @@ def setup_dashboard_routes(app, config: WebConfig):
                         search_query=search,
                         date_from=date_from,
                         date_to=date_to,
+                        date_type=date_type,
                         amount_min=str(amount_min) if amount_min else "",
                         amount_max=str(amount_max) if amount_max else "",
                         show_creator_filter=False,
@@ -211,7 +215,7 @@ def setup_dashboard_routes(app, config: WebConfig):
         return page_layout("Worker Dashboard", content, user.display_name, user.role.value, avatar_url)
 
     async def owner_dashboard(
-        session, user, role, statuses, search, date_from, date_to,
+        session, user, role, statuses, search, date_from, date_to, date_type,
         amount_min, amount_max, creator_id, page, per_page, bot_token
     ):
         """Dashboard для Owner/Manager - просмотр всех запросов и статистика"""
@@ -225,6 +229,7 @@ def setup_dashboard_routes(app, config: WebConfig):
             search_query=search if search else None,
             date_from=date_from if date_from else None,
             date_to=date_to if date_to else None,
+            date_type=date_type,
             amount_min=amount_min,
             amount_max=amount_max,
             creator_id=creator_id
@@ -241,6 +246,7 @@ def setup_dashboard_routes(app, config: WebConfig):
             search_query=search if search else None,
             date_from=date_from if date_from else None,
             date_to=date_to if date_to else None,
+            date_type=date_type,
             amount_min=amount_min,
             amount_max=amount_max,
             creator_id=creator_id,
@@ -286,6 +292,7 @@ def setup_dashboard_routes(app, config: WebConfig):
                         search_query=search,
                         date_from=date_from,
                         date_to=date_to,
+                        date_type=date_type,
                         amount_min=str(amount_min) if amount_min else "",
                         amount_max=str(amount_max) if amount_max else "",
                         creator_id=creator_id,
