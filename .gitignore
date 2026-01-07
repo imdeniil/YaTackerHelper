@@ -31,6 +31,7 @@ pip-log.txt
 pip-delete-this-directory.txt
 promt.txt
 promt-front.txt
+image.png
 
 # Unit test / coverage reports
 htmlcov/

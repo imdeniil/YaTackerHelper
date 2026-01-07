@@ -291,6 +291,10 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
             Title(f"{title} - Система учета расходов apod-lab"),
             Script(src="https://cdn.tailwindcss.com"),
             Link(href="https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.min.css", rel="stylesheet", type_="text/css"),
+            # Flatpickr для красивых календарей
+            Link(href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css", rel="stylesheet"),
+            Script(src="https://cdn.jsdelivr.net/npm/flatpickr"),
+            Script(src="https://npmcdn.com/flatpickr/dist/l10n/ru.js"),  # Русская локализация
         ),
         Body(
             navbar(user_name, role, avatar_url),
@@ -298,6 +302,46 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                 content,
                 cls="container mx-auto px-4 py-8"
             ),
+            # Инициализация Flatpickr для календарей и обновление счетчика статусов
+            Script("""
+                // Функция обновления счетчика выбранных статусов
+                function updateStatusCount() {
+                    const checkboxes = document.querySelectorAll('input[name="status"]:checked');
+                    const count = checkboxes.length;
+                    const summaryText = document.getElementById('status-summary-text');
+
+                    if (summaryText) {
+                        if (count > 0) {
+                            summaryText.textContent = count + ' Selected';
+                        } else {
+                            summaryText.textContent = 'Статусы';
+                        }
+                    }
+                }
+
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Конфигурация для русской локализации и кастомного стиля
+                    const config = {
+                        locale: 'ru',
+                        dateFormat: 'Y-m-d',
+                        allowInput: true,
+                        clickOpens: true,
+                        theme: 'light'
+                    };
+
+                    // Инициализация календарей
+                    const dateFromInput = document.getElementById('date_from_picker');
+                    const dateToInput = document.getElementById('date_to_picker');
+
+                    if (dateFromInput) {
+                        flatpickr(dateFromInput, config);
+                    }
+
+                    if (dateToInput) {
+                        flatpickr(dateToInput, config);
+                    }
+                });
+            """),
             data_theme="light"
         )
     )
@@ -371,112 +415,80 @@ def advanced_filters(
 
         # Фильтры в три колонки
         Div(
-            # Левая колонка - Статусы dropdown
+            # Левая колонка - Статусы dropdown + Создатели
             Div(
-                Details(
-                    Summary("Статусы", cls="btn btn-sm btn-outline w-full"),
-                    Ul(
-                        Li(
-                            Label(
-                                Input(
-                                    type="checkbox",
-                                    name="status",
-                                    value="pending",
-                                    checked=("pending" in current_statuses),
-                                    cls="checkbox checkbox-sm checkbox-warning"
-                                ),
-                                Span("⏳ Ожидает", cls="ml-2"),
-                                cls="label cursor-pointer justify-start gap-2 p-2"
-                            )
-                        ),
-                        Li(
-                            Label(
-                                Input(
-                                    type="checkbox",
-                                    name="status",
-                                    value="scheduled",
-                                    checked=("scheduled" in current_statuses),
-                                    cls="checkbox checkbox-sm checkbox-info"
-                                ),
-                                Span("📅 Запланировано", cls="ml-2"),
-                                cls="label cursor-pointer justify-start gap-2 p-2"
-                            )
-                        ),
-                        Li(
-                            Label(
-                                Input(
-                                    type="checkbox",
-                                    name="status",
-                                    value="paid",
-                                    checked=("paid" in current_statuses),
-                                    cls="checkbox checkbox-sm checkbox-success"
-                                ),
-                                Span("✅ Оплачено", cls="ml-2"),
-                                cls="label cursor-pointer justify-start gap-2 p-2"
-                            )
-                        ),
-                        Li(
-                            Label(
-                                Input(
-                                    type="checkbox",
-                                    name="status",
-                                    value="cancelled",
-                                    checked=("cancelled" in current_statuses),
-                                    cls="checkbox checkbox-sm checkbox-error"
-                                ),
-                                Span("❌ Отменено", cls="ml-2"),
-                                cls="label cursor-pointer justify-start gap-2 p-2"
-                            )
-                        ),
-                        cls="menu dropdown-content bg-base-100 rounded-box z-[1] w-52 p-2 shadow"
-                    ),
-                    cls="dropdown w-full"
-                ),
-                cls="form-control"
-            ),
-
-            # Центральная колонка - Период (два календаря)
-            Div(
+                # Статусы
                 Div(
-                    Input(
-                        type="date",
-                        name="date_from",
-                        value=date_from,
-                        placeholder="📅 Дата от",
-                        cls="input input-sm input-bordered w-full"
-                    ),
-                    cls="form-control mb-2"
-                ),
-                Div(
-                    Input(
-                        type="date",
-                        name="date_to",
-                        value=date_to,
-                        placeholder="📅 Дата до",
-                        cls="input input-sm input-bordered w-full"
-                    ),
-                    cls="form-control"
-                ),
-                cls="form-control"
-            ),
-
-            # Правая колонка - Сумма и создатель
-            Div(
-                # Диапазон сумм
-                Div(
-                    Input(
-                        type="number",
-                        name="amount_min",
-                        value=amount_min,
-                        placeholder="💰 Сумма от",
-                        cls="input input-sm input-bordered w-full mb-2"
-                    ),
-                    Input(
-                        type="number",
-                        name="amount_max",
-                        value=amount_max,
-                        placeholder="💰 Сумма до",
-                        cls="input input-sm input-bordered w-full"
+                    Details(
+                        Summary(
+                            Span(
+                                f"{len(current_statuses)} Selected" if current_statuses else "Статусы",
+                                id="status-summary-text"
+                            ),
+                            Span("▲", cls="ml-auto text-primary", style="font-size: 0.75rem;"),
+                            cls="btn btn-sm btn-outline w-full justify-between",
+                            style="text-align: left;"
+                        ),
+                        Ul(
+                            Li(
+                                Label(
+                                    Input(
+                                        type="checkbox",
+                                        name="status",
+                                        value="pending",
+                                        checked=("pending" in current_statuses),
+                                        cls="checkbox checkbox-sm checkbox-primary",
+                                        onchange="updateStatusCount()"
+                                    ),
+                                    Span("⏳ Ожидает", cls="ml-2"),
+                                    cls="label cursor-pointer justify-start gap-2 p-2"
+                                )
+                            ),
+                            Li(
+                                Label(
+                                    Input(
+                                        type="checkbox",
+                                        name="status",
+                                        value="scheduled",
+                                        checked=("scheduled" in current_statuses),
+                                        cls="checkbox checkbox-sm checkbox-primary",
+                                        onchange="updateStatusCount()"
+                                    ),
+                                    Span("📅 Запланировано", cls="ml-2"),
+                                    cls="label cursor-pointer justify-start gap-2 p-2"
+                                )
+                            ),
+                            Li(
+                                Label(
+                                    Input(
+                                        type="checkbox",
+                                        name="status",
+                                        value="paid",
+                                        checked=("paid" in current_statuses),
+                                        cls="checkbox checkbox-sm checkbox-primary",
+                                        onchange="updateStatusCount()"
+                                    ),
+                                    Span("✅ Оплачено", cls="ml-2"),
+                                    cls="label cursor-pointer justify-start gap-2 p-2"
+                                )
+                            ),
+                            Li(
+                                Label(
+                                    Input(
+                                        type="checkbox",
+                                        name="status",
+                                        value="cancelled",
+                                        checked=("cancelled" in current_statuses),
+                                        cls="checkbox checkbox-sm checkbox-primary",
+                                        onchange="updateStatusCount()"
+                                    ),
+                                    Span("❌ Отменено", cls="ml-2"),
+                                    cls="label cursor-pointer justify-start gap-2 p-2"
+                                )
+                            ),
+                            cls="menu dropdown-content bg-base-100 rounded-box z-[1] w-full p-2 shadow mt-1"
+                        ),
+                        cls="dropdown w-full"
                     ),
                     cls="form-control mb-3" if show_creator_filter else "form-control"
                 ),
@@ -499,6 +511,52 @@ def advanced_filters(
                     cls="form-control"
                 ) if show_creator_filter else None,
 
+                cls="form-control"
+            ),
+
+            # Центральная колонка - Период (два календаря)
+            Div(
+                Div(
+                    Input(
+                        type="text",
+                        name="date_from",
+                        id="date_from_picker",
+                        value=date_from,
+                        placeholder="📅 Дата от",
+                        cls="input input-sm input-bordered w-full"
+                    ),
+                    cls="form-control mb-2"
+                ),
+                Div(
+                    Input(
+                        type="text",
+                        name="date_to",
+                        id="date_to_picker",
+                        value=date_to,
+                        placeholder="📅 Дата до",
+                        cls="input input-sm input-bordered w-full"
+                    ),
+                    cls="form-control"
+                ),
+                cls="form-control"
+            ),
+
+            # Правая колонка - Диапазон сумм
+            Div(
+                Input(
+                    type="number",
+                    name="amount_min",
+                    value=amount_min,
+                    placeholder="💰 Сумма от",
+                    cls="input input-sm input-bordered w-full mb-2"
+                ),
+                Input(
+                    type="number",
+                    name="amount_max",
+                    value=amount_max,
+                    placeholder="💰 Сумма до",
+                    cls="input input-sm input-bordered w-full"
+                ),
                 cls="form-control"
             ),
 
