@@ -319,6 +319,58 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                     }
                 }
 
+                // Функция переключения стрелки для dropdown создателей
+                function toggleCreatorArrow() {
+                    const dropdown = document.getElementById('creator-dropdown');
+                    const arrow = document.getElementById('creator-arrow');
+
+                    if (arrow) {
+                        setTimeout(() => {
+                            if (dropdown.hasAttribute('open')) {
+                                arrow.textContent = '▲';
+                                arrow.classList.add('text-primary');
+                            } else {
+                                arrow.textContent = '▼';
+                                arrow.classList.remove('text-primary');
+                            }
+                        }, 10);
+                    }
+                }
+
+                // Функция обновления текста создателя
+                function updateCreatorText(radio) {
+                    const summaryText = document.getElementById('creator-summary-text');
+
+                    if (summaryText) {
+                        if (radio.value === '') {
+                            summaryText.textContent = '👤 Все создатели';
+                        } else {
+                            const label = radio.closest('label');
+                            const nameSpan = label ? label.querySelector('span') : null;
+                            const displayName = nameSpan ? nameSpan.textContent.trim() : 'Создатель';
+                            summaryText.textContent = '👤 ' + displayName;
+                        }
+                    }
+                }
+
+                // Обработчик для dropdown статусов (переключение стрелки)
+                function toggleStatusArrow(event) {
+                    const arrow = document.getElementById('status-arrow');
+                    const details = event.target;
+
+                    if (arrow) {
+                        setTimeout(() => {
+                            if (details.hasAttribute('open')) {
+                                arrow.textContent = '▲';
+                                arrow.classList.add('text-primary');
+                            } else {
+                                arrow.textContent = '▼';
+                                arrow.classList.remove('text-primary');
+                            }
+                        }, 10);
+                    }
+                }
+
                 document.addEventListener('DOMContentLoaded', function() {
                     // Конфигурация для русской локализации и кастомного стиля
                     const config = {
@@ -339,6 +391,12 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
 
                     if (dateToInput) {
                         flatpickr(dateToInput, config);
+                    }
+
+                    // Добавляем обработчик клика для dropdown статусов
+                    const statusDropdown = document.getElementById('status-dropdown');
+                    if (statusDropdown) {
+                        statusDropdown.addEventListener('toggle', toggleStatusArrow);
                     }
                 });
             """),
@@ -425,7 +483,7 @@ def advanced_filters(
                                 f"{len(current_statuses)} Selected" if current_statuses else "Статусы",
                                 id="status-summary-text"
                             ),
-                            Span("▲", cls="ml-auto text-primary", style="font-size: 0.75rem;"),
+                            Span("▼", cls="ml-auto", id="status-arrow", style="font-size: 0.75rem;"),
                             cls="btn btn-sm btn-outline w-full justify-between",
                             style="text-align: left;"
                         ),
@@ -488,25 +546,61 @@ def advanced_filters(
                             ),
                             cls="menu dropdown-content bg-base-100 rounded-box z-[1] w-full p-2 shadow mt-1"
                         ),
-                        cls="dropdown w-full"
+                        cls="dropdown w-full",
+                        id="status-dropdown"
                     ),
                     cls="form-control mb-3" if show_creator_filter else "form-control"
                 ),
 
                 # Фильтр по создателю (только для Owner/Manager)
                 Div(
-                    Select(
-                        Option("👤 Все создатели", value="", selected=(not creator_id)),
-                        *[
-                            Option(
-                                user.display_name,
-                                value=str(user.id),
-                                selected=(creator_id == user.id)
-                            )
-                            for user in (users or [])
-                        ],
-                        name="creator_id",
-                        cls="select select-sm select-bordered w-full"
+                    Details(
+                        Summary(
+                            Span(
+                                "👤 " + (next((u.display_name for u in (users or []) if u.id == creator_id), "Все создатели")),
+                                id="creator-summary-text"
+                            ),
+                            Span("▼", cls="ml-auto", id="creator-arrow", style="font-size: 0.75rem;"),
+                            cls="btn btn-sm btn-outline w-full justify-between",
+                            style="text-align: left;",
+                            onclick="toggleCreatorArrow()"
+                        ),
+                        Ul(
+                            Li(
+                                Label(
+                                    Input(
+                                        type="radio",
+                                        name="creator_id",
+                                        value="",
+                                        checked=(not creator_id),
+                                        cls="radio radio-sm radio-primary",
+                                        onchange="updateCreatorText(this)"
+                                    ),
+                                    Span("👤 Все создатели", cls="ml-2"),
+                                    cls="label cursor-pointer justify-start gap-2 p-2"
+                                )
+                            ),
+                            *[
+                                Li(
+                                    Label(
+                                        Input(
+                                            type="radio",
+                                            name="creator_id",
+                                            value=str(user.id),
+                                            checked=(creator_id == user.id),
+                                            cls="radio radio-sm radio-primary",
+                                            onchange="updateCreatorText(this)"
+                                        ),
+                                        Span(user.display_name, cls="ml-2"),
+                                        cls="label cursor-pointer justify-start gap-2 p-2"
+                                    )
+                                )
+                                for user in (users or [])
+                            ],
+                            cls="menu dropdown-content bg-base-100 rounded-box z-[1] w-full p-2 shadow mt-1"
+                        ),
+                        cls="dropdown w-full",
+                        id="creator-dropdown"
                     ),
                     cls="form-control"
                 ) if show_creator_filter else None,
