@@ -1,6 +1,6 @@
 from typing import Optional, List
 from datetime import datetime, date
-from sqlalchemy import select
+from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from .models import User, UserSettings, UserRole, PaymentRequest, PaymentRequestStatus, BillingNotification
@@ -328,16 +328,32 @@ class PaymentRequestCRUD:
     async def get_user_payment_requests(
         session: AsyncSession,
         user_id: int,
+        status_filter: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
     ) -> List[PaymentRequest]:
-        """Получает все запросы на оплату созданные пользователем
+        """Получает запросы пользователя с пагинацией и сортировкой по приоритету
 
         Args:
             session: Сессия БД
             user_id: ID пользователя
+            status_filter: Фильтр по статусу (all, pending, scheduled, paid, cancelled)
+            skip: Количество пропускаемых записей
+            limit: Максимальное количество возвращаемых записей
 
         Returns:
             Список запросов пользователя
         """
+        # Создаем сортировку по приоритету статуса
+        status_priority = case(
+            (PaymentRequest.status == PaymentRequestStatus.PENDING.value, 1),
+            (PaymentRequest.status == PaymentRequestStatus.SCHEDULED_TODAY.value, 2),
+            (PaymentRequest.status == PaymentRequestStatus.SCHEDULED_DATE.value, 2),
+            (PaymentRequest.status == PaymentRequestStatus.PAID.value, 3),
+            (PaymentRequest.status == PaymentRequestStatus.CANCELLED.value, 4),
+            else_=5
+        )
+
         query = (
             select(PaymentRequest)
             .options(
@@ -346,25 +362,59 @@ class PaymentRequestCRUD:
                 selectinload(PaymentRequest.paid_by),
             )
             .where(PaymentRequest.created_by_id == user_id)
-            .order_by(PaymentRequest.created_at.desc())
         )
+
+        # Применяем фильтр если нужно
+        if status_filter and status_filter != "all":
+            if status_filter == "pending":
+                query = query.where(PaymentRequest.status == PaymentRequestStatus.PENDING.value)
+            elif status_filter == "scheduled":
+                query = query.where(PaymentRequest.status.in_([
+                    PaymentRequestStatus.SCHEDULED_TODAY.value,
+                    PaymentRequestStatus.SCHEDULED_DATE.value
+                ]))
+            elif status_filter == "paid":
+                query = query.where(PaymentRequest.status == PaymentRequestStatus.PAID.value)
+            elif status_filter == "cancelled":
+                query = query.where(PaymentRequest.status == PaymentRequestStatus.CANCELLED.value)
+
+        # Сортировка: сначала по приоритету статуса, потом по дате (новые сверху)
+        query = query.order_by(status_priority, PaymentRequest.created_at.desc())
+
+        # Пагинация
+        query = query.offset(skip).limit(limit)
+
         result = await session.execute(query)
         return list(result.scalars().all())
 
     @staticmethod
     async def get_all_payment_requests(
         session: AsyncSession,
-        status: Optional[PaymentRequestStatus] = None,
+        status_filter: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
     ) -> List[PaymentRequest]:
-        """Получает все запросы на оплату (для billing контактов)
+        """Получает все запросы с пагинацией и сортировкой по приоритету
 
         Args:
             session: Сессия БД
-            status: Фильтр по статусу (опционально)
+            status_filter: Фильтр по статусу (all, pending, scheduled, paid, cancelled)
+            skip: Количество пропускаемых записей
+            limit: Максимальное количество возвращаемых записей
 
         Returns:
             Список всех запросов
         """
+        # Создаем сортировку по приоритету статуса
+        status_priority = case(
+            (PaymentRequest.status == PaymentRequestStatus.PENDING.value, 1),
+            (PaymentRequest.status == PaymentRequestStatus.SCHEDULED_TODAY.value, 2),
+            (PaymentRequest.status == PaymentRequestStatus.SCHEDULED_DATE.value, 2),
+            (PaymentRequest.status == PaymentRequestStatus.PAID.value, 3),
+            (PaymentRequest.status == PaymentRequestStatus.CANCELLED.value, 4),
+            else_=5
+        )
+
         query = (
             select(PaymentRequest)
             .options(
@@ -374,10 +424,26 @@ class PaymentRequestCRUD:
             )
         )
 
-        if status:
-            query = query.where(PaymentRequest.status == status)
+        # Применяем фильтр если нужно
+        if status_filter and status_filter != "all":
+            if status_filter == "pending":
+                query = query.where(PaymentRequest.status == PaymentRequestStatus.PENDING.value)
+            elif status_filter == "scheduled":
+                query = query.where(PaymentRequest.status.in_([
+                    PaymentRequestStatus.SCHEDULED_TODAY.value,
+                    PaymentRequestStatus.SCHEDULED_DATE.value
+                ]))
+            elif status_filter == "paid":
+                query = query.where(PaymentRequest.status == PaymentRequestStatus.PAID.value)
+            elif status_filter == "cancelled":
+                query = query.where(PaymentRequest.status == PaymentRequestStatus.CANCELLED.value)
 
-        query = query.order_by(PaymentRequest.created_at.desc())
+        # Сортировка: сначала по приоритету статуса, потом по дате (новые сверху)
+        query = query.order_by(status_priority, PaymentRequest.created_at.desc())
+
+        # Пагинация
+        query = query.offset(skip).limit(limit)
+
         result = await session.execute(query)
         return list(result.scalars().all())
 
@@ -508,6 +574,76 @@ class PaymentRequestCRUD:
             processing_by_id=processing_by_id,
             scheduled_date=scheduled_date,
         )
+
+    @staticmethod
+    async def count_user_payment_requests(
+        session: AsyncSession,
+        user_id: int,
+        status_filter: Optional[str] = None
+    ) -> int:
+        """Подсчитывает количество запросов пользователя
+
+        Args:
+            session: Сессия БД
+            user_id: ID пользователя
+            status_filter: Фильтр по статусу (all, pending, scheduled, paid, cancelled)
+
+        Returns:
+            Количество запросов
+        """
+        query = select(func.count(PaymentRequest.id)).where(
+            PaymentRequest.created_by_id == user_id
+        )
+
+        # Применяем фильтр если нужно
+        if status_filter and status_filter != "all":
+            if status_filter == "pending":
+                query = query.where(PaymentRequest.status == PaymentRequestStatus.PENDING.value)
+            elif status_filter == "scheduled":
+                query = query.where(PaymentRequest.status.in_([
+                    PaymentRequestStatus.SCHEDULED_TODAY.value,
+                    PaymentRequestStatus.SCHEDULED_DATE.value
+                ]))
+            elif status_filter == "paid":
+                query = query.where(PaymentRequest.status == PaymentRequestStatus.PAID.value)
+            elif status_filter == "cancelled":
+                query = query.where(PaymentRequest.status == PaymentRequestStatus.CANCELLED.value)
+
+        result = await session.execute(query)
+        return result.scalar() or 0
+
+    @staticmethod
+    async def count_all_payment_requests(
+        session: AsyncSession,
+        status_filter: Optional[str] = None
+    ) -> int:
+        """Подсчитывает общее количество запросов
+
+        Args:
+            session: Сессия БД
+            status_filter: Фильтр по статусу (all, pending, scheduled, paid, cancelled)
+
+        Returns:
+            Количество запросов
+        """
+        query = select(func.count(PaymentRequest.id))
+
+        # Применяем фильтр если нужно
+        if status_filter and status_filter != "all":
+            if status_filter == "pending":
+                query = query.where(PaymentRequest.status == PaymentRequestStatus.PENDING.value)
+            elif status_filter == "scheduled":
+                query = query.where(PaymentRequest.status.in_([
+                    PaymentRequestStatus.SCHEDULED_TODAY.value,
+                    PaymentRequestStatus.SCHEDULED_DATE.value
+                ]))
+            elif status_filter == "paid":
+                query = query.where(PaymentRequest.status == PaymentRequestStatus.PAID.value)
+            elif status_filter == "cancelled":
+                query = query.where(PaymentRequest.status == PaymentRequestStatus.CANCELLED.value)
+
+        result = await session.execute(query)
+        return result.scalar() or 0
 
     @staticmethod
     async def set_worker_message_id(

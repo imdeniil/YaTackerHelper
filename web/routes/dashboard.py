@@ -50,11 +50,15 @@ def setup_dashboard_routes(app, config: WebConfig):
 
     @app.get("/dashboard")
     @require_auth
-    async def dashboard(sess, filter: str = "all"):
+    async def dashboard(sess, filter: str = "all", page: int = 1, per_page: int = 20):
         """Главная страница dashboard - роутинг по ролям"""
         user_id = sess.get('user_id')
         role = sess.get('role')
         display_name = sess.get('display_name')
+
+        # Валидация параметров
+        page = max(1, page)  # Минимум 1
+        per_page = per_page if per_page in [10, 25, 50, 100] else 20
 
         # Получаем пользователя из БД для актуальных данных
         async with get_session() as session:
@@ -66,36 +70,48 @@ def setup_dashboard_routes(app, config: WebConfig):
 
             # Роутинг по ролям
             if role == UserRole.WORKER.value:
-                return await worker_dashboard(session, user, filter, config.bot_token)
+                return await worker_dashboard(session, user, filter, page, per_page, config.bot_token)
             elif role in [UserRole.OWNER.value, UserRole.MANAGER.value]:
-                return await owner_dashboard(session, user, role, filter, config.bot_token)
+                return await owner_dashboard(session, user, role, filter, page, per_page, config.bot_token)
 
         # Fallback
         return RedirectResponse('/login', status_code=303)
 
-    async def worker_dashboard(session, user, filter_status, bot_token):
+    async def worker_dashboard(session, user, filter_status, page, per_page, bot_token):
         """Dashboard для Worker - создание и просмотр своих запросов"""
-        # Получаем все запросы пользователя
-        all_requests = await PaymentRequestCRUD.get_user_payment_requests(session, user.id)
+        # Подсчет общего количества записей
+        total_items = await PaymentRequestCRUD.count_user_payment_requests(
+            session, user.id, filter_status
+        )
 
-        # Фильтруем по статусу
-        if filter_status == "pending":
-            requests = [r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value]
-        elif filter_status == "scheduled":
-            requests = [r for r in all_requests if r.status in [
-                PaymentRequestStatus.SCHEDULED_TODAY.value,
-                PaymentRequestStatus.SCHEDULED_DATE.value
-            ]]
-        elif filter_status == "paid":
-            requests = [r for r in all_requests if r.status == PaymentRequestStatus.PAID.value]
-        elif filter_status == "cancelled":
-            requests = [r for r in all_requests if r.status == PaymentRequestStatus.CANCELLED.value]
-        else:
-            requests = all_requests
+        # Подсчет страниц
+        total_pages = (total_items + per_page - 1) // per_page  # Округление вверх
 
-        # Статистика
+        # Получаем запросы с пагинацией
+        skip = (page - 1) * per_page
+        requests = await PaymentRequestCRUD.get_user_payment_requests(
+            session=session,
+            user_id=user.id,
+            status_filter=filter_status,
+            skip=skip,
+            limit=per_page
+        )
+
+        # Статистика (на основе всех запросов пользователя, без пагинации)
+        all_requests = await PaymentRequestCRUD.get_user_payment_requests(
+            session, user.id, status_filter=None, skip=0, limit=10000
+        )
         total_amount = sum(float(r.amount.replace(" ", "").replace(",", ".")) for r in all_requests if r.status == PaymentRequestStatus.PAID.value)
         pending_count = len([r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value])
+
+        # Данные для пагинации
+        pagination_data = {
+            'current_page': page,
+            'total_pages': total_pages,
+            'per_page': per_page,
+            'total_items': total_items,
+            'filter_status': filter_status
+        }
 
         content = Div(
             # Статистика
@@ -109,10 +125,10 @@ def setup_dashboard_routes(app, config: WebConfig):
             # Фильтры
             card("Фильтры", filter_tabs(filter_status)),
 
-            # Таблица
+            # Таблица с пагинацией
             Div(
                 Div(
-                    payment_request_table(requests, show_creator=False),
+                    payment_request_table(requests, show_creator=False, pagination_data=pagination_data),
                     cls="card-body p-0"
                 ),
                 cls="card bg-base-100 shadow-xl my-4"
@@ -129,33 +145,44 @@ def setup_dashboard_routes(app, config: WebConfig):
 
         return page_layout("Worker Dashboard", content, user.display_name, user.role.value, avatar_url)
 
-    async def owner_dashboard(session, user, role, filter_status, bot_token):
+    async def owner_dashboard(session, user, role, filter_status, page, per_page, bot_token):
         """Dashboard для Owner/Manager - просмотр всех запросов и статистика"""
-        # Получаем все запросы системы
-        all_requests = await PaymentRequestCRUD.get_all_payment_requests(session)
+        # Подсчет общего количества записей
+        total_items = await PaymentRequestCRUD.count_all_payment_requests(
+            session, filter_status
+        )
 
-        # Фильтруем по статусу
-        if filter_status == "pending":
-            requests = [r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value]
-        elif filter_status == "scheduled":
-            requests = [r for r in all_requests if r.status in [
-                PaymentRequestStatus.SCHEDULED_TODAY.value,
-                PaymentRequestStatus.SCHEDULED_DATE.value
-            ]]
-        elif filter_status == "paid":
-            requests = [r for r in all_requests if r.status == PaymentRequestStatus.PAID.value]
-        elif filter_status == "cancelled":
-            requests = [r for r in all_requests if r.status == PaymentRequestStatus.CANCELLED.value]
-        else:
-            requests = all_requests
+        # Подсчет страниц
+        total_pages = (total_items + per_page - 1) // per_page  # Округление вверх
 
-        # Статистика
+        # Получаем запросы с пагинацией
+        skip = (page - 1) * per_page
+        requests = await PaymentRequestCRUD.get_all_payment_requests(
+            session=session,
+            status_filter=filter_status,
+            skip=skip,
+            limit=per_page
+        )
+
+        # Статистика (на основе всех запросов системы, без пагинации)
+        all_requests = await PaymentRequestCRUD.get_all_payment_requests(
+            session, status_filter=None, skip=0, limit=10000
+        )
         total_amount = sum(float(r.amount.replace(" ", "").replace(",", ".")) for r in all_requests if r.status == PaymentRequestStatus.PAID.value)
         pending_count = len([r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value])
         scheduled_count = len([r for r in all_requests if r.status in [
             PaymentRequestStatus.SCHEDULED_TODAY.value,
             PaymentRequestStatus.SCHEDULED_DATE.value
         ]])
+
+        # Данные для пагинации
+        pagination_data = {
+            'current_page': page,
+            'total_pages': total_pages,
+            'per_page': per_page,
+            'total_items': total_items,
+            'filter_status': filter_status
+        }
 
         content = Div(
             # Статистика
@@ -170,10 +197,10 @@ def setup_dashboard_routes(app, config: WebConfig):
             # Фильтры
             card("Фильтры", filter_tabs(filter_status)),
 
-            # Таблица
+            # Таблица с пагинацией
             Div(
                 Div(
-                    payment_request_table(requests, show_creator=True),
+                    payment_request_table(requests, show_creator=True, pagination_data=pagination_data),
                     cls="card-body p-0"
                 ),
                 cls="card bg-base-100 shadow-xl my-4"
@@ -475,3 +502,89 @@ def setup_dashboard_routes(app, config: WebConfig):
             logger.info(f"Owner {current_user_id} создал нового пользователя #{new_user.id}")
 
         return RedirectResponse('/users', status_code=303)
+
+    @app.get("/payment/{request_id}/download/invoice")
+    @require_auth
+    async def download_invoice(sess, request_id: int):
+        """Скачивание счета"""
+        user_id = sess.get('user_id')
+        role = sess.get('role')
+
+        async with get_session() as session:
+            payment_request = await PaymentRequestCRUD.get_payment_request_by_id(session, request_id)
+
+            if not payment_request:
+                return RedirectResponse('/dashboard', status_code=303)
+
+            # Worker может скачивать только свои файлы
+            if role == UserRole.WORKER.value and payment_request.created_by_id != user_id:
+                return RedirectResponse('/dashboard', status_code=303)
+
+            if not payment_request.invoice_file_id:
+                return RedirectResponse(f'/payment/{request_id}', status_code=303)
+
+            # Получаем URL файла из Telegram
+            import httpx
+            async with httpx.AsyncClient() as client:
+                # Получаем информацию о файле
+                file_response = await client.get(
+                    f"https://api.telegram.org/bot{config.bot_token}/getFile",
+                    params={"file_id": payment_request.invoice_file_id}
+                )
+
+                if file_response.status_code != 200:
+                    logger.error(f"Не удалось получить файл счета для запроса #{request_id}")
+                    return RedirectResponse(f'/payment/{request_id}', status_code=303)
+
+                file_data = file_response.json()
+                if not file_data.get("ok"):
+                    return RedirectResponse(f'/payment/{request_id}', status_code=303)
+
+                file_path = file_data["result"]["file_path"]
+                file_url = f"https://api.telegram.org/file/bot{config.bot_token}/{file_path}"
+
+                # Редирект на файл
+                return RedirectResponse(file_url, status_code=303)
+
+    @app.get("/payment/{request_id}/download/proof")
+    @require_auth
+    async def download_payment_proof(sess, request_id: int):
+        """Скачивание платежки"""
+        user_id = sess.get('user_id')
+        role = sess.get('role')
+
+        async with get_session() as session:
+            payment_request = await PaymentRequestCRUD.get_payment_request_by_id(session, request_id)
+
+            if not payment_request:
+                return RedirectResponse('/dashboard', status_code=303)
+
+            # Worker может скачивать только свои файлы
+            if role == UserRole.WORKER.value and payment_request.created_by_id != user_id:
+                return RedirectResponse('/dashboard', status_code=303)
+
+            if not payment_request.payment_proof_file_id:
+                return RedirectResponse(f'/payment/{request_id}', status_code=303)
+
+            # Получаем URL файла из Telegram
+            import httpx
+            async with httpx.AsyncClient() as client:
+                # Получаем информацию о файле
+                file_response = await client.get(
+                    f"https://api.telegram.org/bot{config.bot_token}/getFile",
+                    params={"file_id": payment_request.payment_proof_file_id}
+                )
+
+                if file_response.status_code != 200:
+                    logger.error(f"Не удалось получить файл платежки для запроса #{request_id}")
+                    return RedirectResponse(f'/payment/{request_id}', status_code=303)
+
+                file_data = file_response.json()
+                if not file_data.get("ok"):
+                    return RedirectResponse(f'/payment/{request_id}', status_code=303)
+
+                file_path = file_data["result"]["file_path"]
+                file_url = f"https://api.telegram.org/file/bot{config.bot_token}/{file_path}"
+
+                # Редирект на файл
+                return RedirectResponse(file_url, status_code=303)

@@ -9,11 +9,11 @@ from bot.database.models import PaymentRequest, PaymentRequestStatus, User, User
 def status_badge(status: PaymentRequestStatus) -> Span:
     """Бейдж статуса запроса на оплату"""
     status_config = {
-        PaymentRequestStatus.PENDING: ("⏳ Ожидает", "badge-warning"),
-        PaymentRequestStatus.SCHEDULED_TODAY: ("🔜 Сегодня", "badge-info"),
-        PaymentRequestStatus.SCHEDULED_DATE: ("📅 Запланировано", "badge-info"),
-        PaymentRequestStatus.PAID: ("✅ Оплачено", "badge-success"),
-        PaymentRequestStatus.CANCELLED: ("❌ Отменено", "badge-error"),
+        PaymentRequestStatus.PENDING: ("⏳ Ожидает", "badge-warning badge-outline opacity-80"),
+        PaymentRequestStatus.SCHEDULED_TODAY: ("🔜 Сегодня", "badge-info badge-outline opacity-80"),
+        PaymentRequestStatus.SCHEDULED_DATE: ("📅 Запланировано", "badge-info badge-outline opacity-80"),
+        PaymentRequestStatus.PAID: ("✅ Оплачено", "badge-success badge-outline opacity-80"),
+        PaymentRequestStatus.CANCELLED: ("❌ Отменено", "badge-error badge-outline opacity-80"),
     }
 
     # Преобразуем строку в enum если нужно
@@ -97,22 +97,36 @@ def payment_request_row(request: PaymentRequest, show_creator: bool = False) -> 
     elif request.scheduled_date:
         date_info = request.scheduled_date.strftime("%d.%m.%Y")
 
+    # Иконки для счета и платежки
+    invoice_icon = (
+        A("📥", href=f"/payment/{request.id}/download/invoice", title="Скачать счет", cls="text-lg", onclick="event.stopPropagation()")
+        if request.invoice_file_id
+        else Span("❌", cls="text-lg opacity-50")
+    )
+
+    payment_proof_icon = (
+        A("📥", href=f"/payment/{request.id}/download/proof", title="Скачать платежку", cls="text-lg", onclick="event.stopPropagation()")
+        if request.payment_proof_file_id
+        else Span("❌", cls="text-lg opacity-50")
+    )
+
     return Tr(
         Th(str(request.id)),
-        creator_cell,
         Td(request.title),
+        creator_cell,
         Td(f"{request.amount} ₽"),
         Td(status_badge(request.status)),
+        Td(invoice_icon),
+        Td(payment_proof_icon),
         Td(created_date),
         Td(date_info if date_info else "-"),
-        Td(
-            A("Подробнее", href=f"/payment/{request.id}", cls="btn btn-xs btn-ghost")
-        )
+        cls="hover cursor-pointer",
+        onclick=f"window.location.href='/payment/{request.id}'"
     )
 
 
-def payment_request_table(requests: List[PaymentRequest], show_creator: bool = False) -> Div:
-    """Таблица запросов на оплату"""
+def payment_request_table(requests: List[PaymentRequest], show_creator: bool = False, pagination_data: Optional[dict] = None) -> Div:
+    """Таблица запросов на оплату с пагинацией"""
     if not requests:
         return Div(
             P("Нет запросов", cls="text-center py-8 text-gray-500")
@@ -121,18 +135,19 @@ def payment_request_table(requests: List[PaymentRequest], show_creator: bool = F
     # Заголовок с колонкой создателя если нужно
     creator_header = Th("Создатель") if show_creator else None
 
-    return Div(
+    table_content = Div(
         Table(
             Thead(
                 Tr(
                     Th("ID"),
-                    creator_header,
                     Th("Название"),
+                    creator_header,
                     Th("Сумма"),
                     Th("Статус"),
+                    Th("Счет"),
+                    Th("Платежка"),
                     Th("Создано"),
-                    Th("Дата оплаты"),
-                    Th("Действия")
+                    Th("Дата оплаты")
                 )
             ),
             Tbody(
@@ -142,6 +157,21 @@ def payment_request_table(requests: List[PaymentRequest], show_creator: bool = F
         ),
         cls="overflow-x-auto"
     )
+
+    # Добавляем пагинацию если данные переданы
+    if pagination_data:
+        return Div(
+            table_content,
+            pagination_footer(
+                current_page=pagination_data['current_page'],
+                total_pages=pagination_data['total_pages'],
+                per_page=pagination_data['per_page'],
+                total_items=pagination_data['total_items'],
+                filter_status=pagination_data['filter_status']
+            )
+        )
+
+    return table_content
 
 
 def create_payment_form() -> Form:
@@ -238,7 +268,7 @@ def user_table(users: List[User]) -> Div:
                     Th("ФИО"),
                     Th("Username"),
                     Th("Роль"),
-                    Th("Billing Contact"),
+                    Th("Плательщик"),
                     Th("Создан"),
                     Th("Действия")
                 )
@@ -307,6 +337,169 @@ def filter_tabs(current_filter: str = "all") -> Div:
             )
 
     return Div(*tab_items, cls="flex gap-2")
+
+
+def generate_page_numbers(current_page: int, total_pages: int) -> List[tuple]:
+    """Генерирует номера страниц с эллипсисами
+
+    Returns:
+        List of tuples: [(page_number, is_ellipsis), ...]
+        Например: [(1, False), (2, False), (None, True), (45, False), (46, False)]
+    """
+    if total_pages <= 7:
+        # Показываем все страницы
+        return [(i, False) for i in range(1, total_pages + 1)]
+
+    pages = []
+
+    # Всегда показываем первую страницу
+    pages.append((1, False))
+
+    # Определяем диапазон вокруг текущей страницы
+    if current_page <= 4:
+        # Начало: 1 2 3 4 5 ... last
+        for i in range(2, min(6, total_pages)):
+            pages.append((i, False))
+        if total_pages > 6:
+            pages.append((None, True))  # эллипсис
+        pages.append((total_pages, False))
+    elif current_page >= total_pages - 3:
+        # Конец: 1 ... 45 46 47 48 49
+        pages.append((None, True))
+        for i in range(total_pages - 4, total_pages):
+            pages.append((i, False))
+        pages.append((total_pages, False))
+    else:
+        # Середина: 1 ... 23 24 25 ... 50
+        pages.append((None, True))
+        for i in range(current_page - 1, current_page + 2):
+            pages.append((i, False))
+        pages.append((None, True))
+        pages.append((total_pages, False))
+
+    return pages
+
+
+def pagination_controls(
+    current_page: int,
+    total_pages: int,
+    per_page: int,
+    filter_status: str,
+    base_path: str = "/dashboard"
+) -> Div:
+    """Элементы управления пагинацией с эллипсисами"""
+
+    if total_pages <= 1:
+        return Div()  # Не показываем пагинацию если одна страница
+
+    page_numbers = generate_page_numbers(current_page, total_pages)
+
+    # Кнопки страниц
+    buttons = []
+
+    # Кнопка "Предыдущая"
+    prev_disabled = current_page <= 1
+    buttons.append(
+        A(
+            "«",
+            href=f"{base_path}?filter={filter_status}&page={current_page - 1}&per_page={per_page}",
+            cls=f"join-item btn {'btn-disabled' if prev_disabled else ''}"
+        ) if not prev_disabled else
+        Button("«", cls="join-item btn btn-disabled", disabled=True)
+    )
+
+    # Номера страниц
+    for page_num, is_ellipsis in page_numbers:
+        if is_ellipsis:
+            buttons.append(
+                Button("...", cls="join-item btn btn-disabled", disabled=True)
+            )
+        else:
+            is_active = page_num == current_page
+            buttons.append(
+                A(
+                    str(page_num),
+                    href=f"{base_path}?filter={filter_status}&page={page_num}&per_page={per_page}",
+                    cls=f"join-item btn {'btn-active' if is_active else ''}"
+                )
+            )
+
+    # Кнопка "Следующая"
+    next_disabled = current_page >= total_pages
+    buttons.append(
+        A(
+            "»",
+            href=f"{base_path}?filter={filter_status}&page={current_page + 1}&per_page={per_page}",
+            cls=f"join-item btn {'btn-disabled' if next_disabled else ''}"
+        ) if not next_disabled else
+        Button("»", cls="join-item btn btn-disabled", disabled=True)
+    )
+
+    return Div(*buttons, cls="join")
+
+
+def per_page_selector(
+    current_per_page: int,
+    current_page: int,
+    filter_status: str,
+    base_path: str = "/dashboard"
+) -> Select:
+    """Выпадающий список для выбора количества записей на странице"""
+
+    options = [10, 25, 50, 100]
+
+    return Select(
+        *[
+            Option(
+                f"{value} записей",
+                value=str(value),
+                selected=(value == current_per_page)
+            )
+            for value in options
+        ],
+        cls="select select-bordered select-sm",
+        onchange=f"window.location.href='{base_path}?filter={filter_status}&page=1&per_page=' + this.value"
+    )
+
+
+def pagination_footer(
+    current_page: int,
+    total_pages: int,
+    per_page: int,
+    total_items: int,
+    filter_status: str
+) -> Div:
+    """Футер с пагинацией и выбором количества записей"""
+
+    # Подсчет диапазона показанных записей
+    start_item = (current_page - 1) * per_page + 1
+    end_item = min(current_page * per_page, total_items)
+
+    return Div(
+        # Информация о записях
+        Div(
+            Span(
+                f"Показано {start_item}-{end_item} из {total_items} записей",
+                cls="text-sm text-gray-600"
+            ),
+            cls="flex items-center"
+        ),
+
+        # Пагинация (слева)
+        Div(
+            pagination_controls(current_page, total_pages, per_page, filter_status),
+            cls="flex items-center"
+        ),
+
+        # Выбор количества (справа)
+        Div(
+            Label("На странице:", cls="text-sm mr-2"),
+            per_page_selector(per_page, current_page, filter_status),
+            cls="flex items-center gap-2"
+        ),
+
+        cls="flex justify-between items-center mt-4 p-4"
+    )
 
 
 def payment_request_detail(request: PaymentRequest, user_role: str) -> Div:
@@ -580,18 +773,18 @@ def user_edit_form(user: User) -> Form:
             cls="form-control mb-4"
         ),
 
-        # Billing Contact
+        # Плательщик
         Div(
             Label(
+                Span("Плательщик", cls="label-text"),
                 Input(
                     type_="checkbox",
                     name="is_billing_contact",
                     value="true",
                     checked=user.is_billing_contact,
-                    cls="checkbox"
+                    cls="toggle toggle-primary"
                 ),
-                Span("Billing Contact", cls="ml-2"),
-                cls="label cursor-pointer justify-start gap-2"
+                cls="label cursor-pointer justify-between"
             ),
             cls="form-control mb-4"
         ),
@@ -663,17 +856,17 @@ def user_create_form() -> Form:
             cls="form-control mb-4"
         ),
 
-        # Billing Contact
+        # Плательщик
         Div(
             Label(
+                Span("Плательщик", cls="label-text"),
                 Input(
                     type_="checkbox",
                     name="is_billing_contact",
                     value="true",
-                    cls="checkbox"
+                    cls="toggle toggle-primary"
                 ),
-                Span("Billing Contact", cls="ml-2"),
-                cls="label cursor-pointer justify-start gap-2"
+                cls="label cursor-pointer justify-between"
             ),
             cls="form-control mb-4"
         ),
