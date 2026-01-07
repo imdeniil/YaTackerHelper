@@ -168,10 +168,11 @@ def payment_request_table(requests: List[PaymentRequest], show_creator: bool = F
                 per_page=pagination_data['per_page'],
                 total_items=pagination_data['total_items'],
                 filter_status=pagination_data['filter_status']
-            )
+            ),
+            id="table-container"
         )
 
-    return table_content
+    return Div(table_content, id="table-container")
 
 
 def create_payment_form() -> Form:
@@ -371,6 +372,139 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                     }
                 }
 
+                // Функция обновления таблицы через AJAX
+                async function updateTable(url) {
+                    const tableContainer = document.getElementById('table-container');
+                    if (!tableContainer) return;
+
+                    try {
+                        // Показываем индикатор загрузки
+                        tableContainer.style.opacity = '0.5';
+
+                        const response = await fetch(url);
+                        const html = await response.text();
+
+                        // Создаем временный контейнер для парсинга HTML
+                        const temp = document.createElement('div');
+                        temp.innerHTML = html;
+
+                        // Находим новый контейнер таблицы
+                        const newTableContainer = temp.querySelector('#table-container');
+                        if (newTableContainer) {
+                            tableContainer.innerHTML = newTableContainer.innerHTML;
+                        }
+
+                        // Обновляем скрытое поле per_page из URL
+                        const urlParams = new URLSearchParams(url.split('?')[1]);
+                        const perPageInput = document.getElementById('per-page-input');
+                        const perPageSelector = document.getElementById('per-page-selector');
+                        if (perPageInput && urlParams.has('per_page')) {
+                            perPageInput.value = urlParams.get('per_page');
+                        }
+                        if (perPageSelector && urlParams.has('per_page')) {
+                            perPageSelector.value = urlParams.get('per_page');
+                        }
+
+                        // Убираем индикатор загрузки
+                        tableContainer.style.opacity = '1';
+
+                        // Обновляем URL без перезагрузки
+                        window.history.pushState({}, '', url);
+                    } catch (error) {
+                        console.error('Ошибка при обновлении таблицы:', error);
+                        tableContainer.style.opacity = '1';
+                    }
+                }
+
+                // Обработчик submit формы
+                function handleFilterSubmit(event) {
+                    event.preventDefault();
+
+                    const form = event.target;
+                    const formData = new FormData(form);
+                    const params = new URLSearchParams();
+
+                    // Добавляем только заполненные параметры
+                    for (const [key, value] of formData.entries()) {
+                        if (value && value.trim() !== '') {
+                            params.append(key, value);
+                        }
+                    }
+
+                    // Сбрасываем на первую страницу при новом поиске
+                    params.set('page', '1');
+
+                    const url = '/dashboard?' + params.toString();
+                    updateTable(url);
+                }
+
+                // Обработчик кнопки сброса
+                function handleResetFilters(event) {
+                    event.preventDefault();
+                    const perPage = document.getElementById('per-page-input').value;
+                    const url = '/dashboard?per_page=' + perPage;
+                    updateTable(url);
+
+                    // Очищаем форму
+                    const form = document.getElementById('filters-form');
+                    if (form) {
+                        form.reset();
+                        // Снимаем все чекбоксы статусов
+                        form.querySelectorAll('input[name="status"]').forEach(cb => cb.checked = false);
+                        updateStatusCount();
+                    }
+                }
+
+                // Обработчик кликов по пагинации
+                function handlePaginationClick(event) {
+                    event.preventDefault();
+                    const link = event.target.closest('.pagination-link');
+                    if (!link || link.classList.contains('btn-disabled')) return;
+
+                    const page = link.getAttribute('data-page');
+                    if (!page) return;
+
+                    // Получаем текущие параметры формы
+                    const form = document.getElementById('filters-form');
+                    const formData = new FormData(form);
+                    const params = new URLSearchParams();
+
+                    // Добавляем только заполненные параметры
+                    for (const [key, value] of formData.entries()) {
+                        if (value && value.trim() !== '') {
+                            params.append(key, value);
+                        }
+                    }
+
+                    // Устанавливаем новую страницу
+                    params.set('page', page);
+
+                    const url = '/dashboard?' + params.toString();
+                    updateTable(url);
+                }
+
+                // Обработчик изменения количества записей на странице
+                function handlePerPageChange(perPage) {
+                    // Получаем текущие параметры формы
+                    const form = document.getElementById('filters-form');
+                    const formData = new FormData(form);
+                    const params = new URLSearchParams();
+
+                    // Добавляем только заполненные параметры
+                    for (const [key, value] of formData.entries()) {
+                        if (value && value.trim() !== '' && key !== 'per_page') {
+                            params.append(key, value);
+                        }
+                    }
+
+                    // Устанавливаем новое значение per_page и сбрасываем на первую страницу
+                    params.set('per_page', perPage);
+                    params.set('page', '1');
+
+                    const url = '/dashboard?' + params.toString();
+                    updateTable(url);
+                }
+
                 document.addEventListener('DOMContentLoaded', function() {
                     // Конфигурация для русской локализации и кастомного стиля
                     const config = {
@@ -398,6 +532,25 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                     if (statusDropdown) {
                         statusDropdown.addEventListener('toggle', toggleStatusArrow);
                     }
+
+                    // Добавляем обработчик формы фильтров
+                    const filtersForm = document.getElementById('filters-form');
+                    if (filtersForm) {
+                        filtersForm.addEventListener('submit', handleFilterSubmit);
+                    }
+
+                    // Добавляем обработчик кнопки сброса
+                    const resetBtn = document.getElementById('reset-filters-btn');
+                    if (resetBtn) {
+                        resetBtn.addEventListener('click', handleResetFilters);
+                    }
+
+                    // Используем event delegation для пагинации (так как она обновляется динамически)
+                    document.addEventListener('click', function(event) {
+                        if (event.target.closest('.pagination-link')) {
+                            handlePaginationClick(event);
+                        }
+                    });
                 });
             """),
             data_theme="light"
@@ -464,10 +617,11 @@ def advanced_filters(
                 name="search",
                 value=search_query,
                 placeholder="🔍 Поиск по названию...",
-                cls="input input-sm input-bordered flex-1"
+                cls="input input-sm input-bordered flex-1",
+                id="search-input"
             ),
-            Button("Применить", type="submit", cls="btn btn-primary btn-sm"),
-            A("×", href=f"/dashboard?per_page={per_page}", cls="btn btn-ghost btn-sm text-xl", title="Сбросить"),
+            Button("Применить", type="submit", cls="btn btn-primary btn-sm", id="apply-filters-btn"),
+            A("×", href=f"/dashboard?per_page={per_page}", cls="btn btn-ghost btn-sm text-xl", title="Сбросить", id="reset-filters-btn"),
             cls="flex gap-2 mb-4"
         ),
 
@@ -658,10 +812,11 @@ def advanced_filters(
         ),
 
         # Скрытое поле для сохранения per_page
-        Input(type="hidden", name="per_page", value=str(per_page)),
+        Input(type="hidden", name="per_page", value=str(per_page), id="per-page-input"),
 
         method="GET",
-        action="/dashboard"
+        action="/dashboard",
+        id="filters-form"
     )
 
 
@@ -728,8 +883,9 @@ def pagination_controls(
     buttons.append(
         A(
             "«",
-            href=f"{base_path}?filter={filter_status}&page={current_page - 1}&per_page={per_page}",
-            cls=f"join-item btn {'btn-disabled' if prev_disabled else ''}"
+            href="#",
+            cls=f"join-item btn {'btn-disabled' if prev_disabled else ''} pagination-link",
+            data_page=str(current_page - 1)
         ) if not prev_disabled else
         Button("«", cls="join-item btn btn-disabled", disabled=True)
     )
@@ -745,8 +901,9 @@ def pagination_controls(
             buttons.append(
                 A(
                     str(page_num),
-                    href=f"{base_path}?filter={filter_status}&page={page_num}&per_page={per_page}",
-                    cls=f"join-item btn {'btn-active' if is_active else ''}"
+                    href="#",
+                    cls=f"join-item btn {'btn-active' if is_active else ''} pagination-link",
+                    data_page=str(page_num)
                 )
             )
 
@@ -755,8 +912,9 @@ def pagination_controls(
     buttons.append(
         A(
             "»",
-            href=f"{base_path}?filter={filter_status}&page={current_page + 1}&per_page={per_page}",
-            cls=f"join-item btn {'btn-disabled' if next_disabled else ''}"
+            href="#",
+            cls=f"join-item btn {'btn-disabled' if next_disabled else ''} pagination-link",
+            data_page=str(current_page + 1)
         ) if not next_disabled else
         Button("»", cls="join-item btn btn-disabled", disabled=True)
     )
@@ -784,7 +942,8 @@ def per_page_selector(
             for value in options
         ],
         cls="select select-bordered select-sm",
-        onchange=f"window.location.href='{base_path}?filter={filter_status}&page=1&per_page=' + this.value"
+        id="per-page-selector",
+        onchange="handlePerPageChange(this.value)"
     )
 
 
