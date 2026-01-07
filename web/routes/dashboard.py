@@ -53,8 +53,8 @@ def setup_dashboard_routes(app, config: WebConfig):
     @require_auth
     async def dashboard(
         sess,
+        request,
         filter: str = "all",
-        status: list = None,
         search: str = "",
         date_from: str = "",
         date_to: str = "",
@@ -73,10 +73,18 @@ def setup_dashboard_routes(app, config: WebConfig):
         page = max(1, page)  # Минимум 1
         per_page = per_page if per_page in [10, 25, 50, 100] else 20
 
-        # Преобразуем параметры фильтрации
-        statuses = status if status else []
-        if isinstance(statuses, str):
-            statuses = [statuses]
+        # Извлекаем статусы из query string (FastHTML не парсит списки автоматически)
+        # Пробуем через query_params.getlist (Starlette)
+        try:
+            statuses = request.query_params.getlist('status') if hasattr(request, 'query_params') else []
+        except:
+            # Fallback - парсим вручную
+            from urllib.parse import parse_qs
+            query_string = str(request.url.query) if request.url.query else ""
+            query_params = parse_qs(query_string)
+            statuses = query_params.get('status', [])
+
+        logger.info(f"Dashboard request - Statuses: {statuses}, Type: {type(statuses)}")
 
         amount_min_float = float(amount_min) if amount_min else None
         amount_max_float = float(amount_max) if amount_max else None

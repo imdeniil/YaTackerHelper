@@ -551,6 +551,34 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                             handlePaginationClick(event);
                         }
                     });
+
+                    // Закрытие dropdown при клике вне его области
+                    document.addEventListener('click', function(event) {
+                        // Проверяем все открытые details элементы
+                        const openDetails = document.querySelectorAll('details[open]');
+
+                        openDetails.forEach(function(details) {
+                            // Проверяем, был ли клик вне этого dropdown
+                            if (!details.contains(event.target)) {
+                                details.removeAttribute('open');
+
+                                // Обновляем стрелки при закрытии
+                                if (details.id === 'status-dropdown') {
+                                    const arrow = document.getElementById('status-arrow');
+                                    if (arrow) {
+                                        arrow.textContent = '▼';
+                                        arrow.classList.remove('text-primary');
+                                    }
+                                } else if (details.id === 'creator-dropdown') {
+                                    const arrow = document.getElementById('creator-arrow');
+                                    if (arrow) {
+                                        arrow.textContent = '▼';
+                                        arrow.classList.remove('text-primary');
+                                    }
+                                }
+                            }
+                        });
+                    });
                 });
             """),
             data_theme="light"
