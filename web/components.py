@@ -342,7 +342,8 @@ def filter_tabs(current_filter: str = "all", per_page: int = 20) -> Div:
 def advanced_filters(
     current_statuses: List[str] = None,
     search_query: str = "",
-    date_filter: str = "all",
+    date_from: str = "",
+    date_to: str = "",
     amount_min: str = "",
     amount_max: str = "",
     creator_id: int = None,
@@ -355,84 +356,100 @@ def advanced_filters(
 
     return Form(
         Div(
-            # Левая колонка - Статусы
+            # Левая колонка - Статусы (dropdown) и Поиск
             Div(
-                Label("Статусы", cls="label font-bold"),
-                Div(
-                    Label(
-                        Input(
-                            type_="checkbox",
-                            name="status",
-                            value="pending",
-                            checked=("pending" in current_statuses),
-                            cls="checkbox checkbox-sm checkbox-warning"
+                # Dropdown со статусами
+                Details(
+                    Summary("Статусы", cls="btn btn-sm btn-outline w-full"),
+                    Ul(
+                        Li(
+                            Label(
+                                Input(
+                                    type_="checkbox",
+                                    name="status",
+                                    value="pending",
+                                    checked=("pending" in current_statuses),
+                                    cls="checkbox checkbox-sm checkbox-warning"
+                                ),
+                                Span("⏳ Ожидает", cls="ml-2"),
+                                cls="label cursor-pointer justify-start gap-2 p-2"
+                            )
                         ),
-                        Span("⏳ Ожидает", cls="ml-2"),
-                        cls="label cursor-pointer justify-start gap-2"
-                    ),
-                    Label(
-                        Input(
-                            type_="checkbox",
-                            name="status",
-                            value="scheduled",
-                            checked=("scheduled" in current_statuses),
-                            cls="checkbox checkbox-sm checkbox-info"
+                        Li(
+                            Label(
+                                Input(
+                                    type_="checkbox",
+                                    name="status",
+                                    value="scheduled",
+                                    checked=("scheduled" in current_statuses),
+                                    cls="checkbox checkbox-sm checkbox-info"
+                                ),
+                                Span("📅 Запланировано", cls="ml-2"),
+                                cls="label cursor-pointer justify-start gap-2 p-2"
+                            )
                         ),
-                        Span("📅 Запланировано", cls="ml-2"),
-                        cls="label cursor-pointer justify-start gap-2"
-                    ),
-                    Label(
-                        Input(
-                            type_="checkbox",
-                            name="status",
-                            value="paid",
-                            checked=("paid" in current_statuses),
-                            cls="checkbox checkbox-sm checkbox-success"
+                        Li(
+                            Label(
+                                Input(
+                                    type_="checkbox",
+                                    name="status",
+                                    value="paid",
+                                    checked=("paid" in current_statuses),
+                                    cls="checkbox checkbox-sm checkbox-success"
+                                ),
+                                Span("✅ Оплачено", cls="ml-2"),
+                                cls="label cursor-pointer justify-start gap-2 p-2"
+                            )
                         ),
-                        Span("✅ Оплачено", cls="ml-2"),
-                        cls="label cursor-pointer justify-start gap-2"
-                    ),
-                    Label(
-                        Input(
-                            type_="checkbox",
-                            name="status",
-                            value="cancelled",
-                            checked=("cancelled" in current_statuses),
-                            cls="checkbox checkbox-sm checkbox-error"
+                        Li(
+                            Label(
+                                Input(
+                                    type_="checkbox",
+                                    name="status",
+                                    value="cancelled",
+                                    checked=("cancelled" in current_statuses),
+                                    cls="checkbox checkbox-sm checkbox-error"
+                                ),
+                                Span("❌ Отменено", cls="ml-2"),
+                                cls="label cursor-pointer justify-start gap-2 p-2"
+                            )
                         ),
-                        Span("❌ Отменено", cls="ml-2"),
-                        cls="label cursor-pointer justify-start gap-2"
+                        cls="menu dropdown-content bg-base-100 rounded-box z-[1] w-52 p-2 shadow"
                     ),
-                    cls="space-y-1"
+                    cls="dropdown w-full mb-3"
                 ),
+
+                # Поиск
+                Input(
+                    type_="text",
+                    name="search",
+                    value=search_query,
+                    placeholder="🔍 Поиск по названию...",
+                    cls="input input-sm input-bordered w-full"
+                ),
+
                 cls="form-control"
             ),
 
-            # Центральная колонка - Поиск и дата
+            # Центральная колонка - Период (два календаря)
             Div(
-                # Поиск
                 Div(
-                    Label("Поиск", cls="label font-bold"),
                     Input(
-                        type_="text",
-                        name="search",
-                        value=search_query,
-                        placeholder="Название или комментарий...",
+                        type_="date",
+                        name="date_from",
+                        value=date_from,
+                        placeholder="От",
                         cls="input input-sm input-bordered w-full"
                     ),
-                    cls="form-control mb-3"
+                    cls="form-control mb-2"
                 ),
-
-                # Период
                 Div(
-                    Label("Период создания", cls="label font-bold"),
-                    Select(
-                        Option("Все время", value="all", selected=(date_filter == "all")),
-                        Option("Сегодня", value="today", selected=(date_filter == "today")),
-                        Option("Неделя", value="week", selected=(date_filter == "week")),
-                        Option("Месяц", value="month", selected=(date_filter == "month")),
-                        name="date_filter",
-                        cls="select select-sm select-bordered w-full"
+                    Input(
+                        type_="date",
+                        name="date_to",
+                        value=date_to,
+                        placeholder="До",
+                        cls="input input-sm input-bordered w-full"
                     ),
                     cls="form-control"
                 ),
@@ -443,32 +460,27 @@ def advanced_filters(
             Div(
                 # Диапазон сумм
                 Div(
-                    Label("Сумма (₽)", cls="label font-bold"),
-                    Div(
-                        Input(
-                            type_="number",
-                            name="amount_min",
-                            value=amount_min,
-                            placeholder="От",
-                            cls="input input-sm input-bordered w-full"
-                        ),
-                        Input(
-                            type_="number",
-                            name="amount_max",
-                            value=amount_max,
-                            placeholder="До",
-                            cls="input input-sm input-bordered w-full"
-                        ),
-                        cls="flex gap-2"
+                    Input(
+                        type_="number",
+                        name="amount_min",
+                        value=amount_min,
+                        placeholder="💰 Сумма от",
+                        cls="input input-sm input-bordered w-full mb-2"
                     ),
-                    cls="form-control mb-3"
+                    Input(
+                        type_="number",
+                        name="amount_max",
+                        value=amount_max,
+                        placeholder="💰 Сумма до",
+                        cls="input input-sm input-bordered w-full"
+                    ),
+                    cls="form-control mb-3" if show_creator_filter else "form-control"
                 ),
 
                 # Фильтр по создателю (только для Owner/Manager)
                 Div(
-                    Label("Создатель", cls="label font-bold"),
                     Select(
-                        Option("Все", value="", selected=(not creator_id)),
+                        Option("👤 Все создатели", value="", selected=(not creator_id)),
                         *[
                             Option(
                                 user.display_name,
@@ -489,12 +501,12 @@ def advanced_filters(
             cls="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4"
         ),
 
-        # Кнопки
+        # Кнопки (центрированы по правому краю)
         Div(
             Input(type_="hidden", name="per_page", value=str(per_page)),
-            Button("Применить фильтры", type_="submit", cls="btn btn-primary btn-sm"),
+            Button("Применить", type_="submit", cls="btn btn-primary btn-sm"),
             A("Сбросить", href=f"/dashboard?per_page={per_page}", cls="btn btn-ghost btn-sm"),
-            cls="flex gap-2"
+            cls="flex gap-2 justify-end"
         ),
 
         method="GET",

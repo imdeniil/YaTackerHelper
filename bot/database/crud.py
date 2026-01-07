@@ -651,7 +651,8 @@ class PaymentRequestCRUD:
         user_id: Optional[int] = None,
         statuses: Optional[List[str]] = None,
         search_query: Optional[str] = None,
-        date_filter: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
         amount_min: Optional[float] = None,
         amount_max: Optional[float] = None,
         creator_id: Optional[int] = None,
@@ -665,7 +666,8 @@ class PaymentRequestCRUD:
             user_id: ID пользователя (для Worker - только свои запросы)
             statuses: Список статусов для фильтрации
             search_query: Текст для поиска по title и comment
-            date_filter: Период создания (today, week, month, all)
+            date_from: Дата начала периода (YYYY-MM-DD)
+            date_to: Дата окончания периода (YYYY-MM-DD)
             amount_min: Минимальная сумма
             amount_max: Максимальная сумма
             creator_id: ID создателя (для Owner/Manager)
@@ -675,7 +677,7 @@ class PaymentRequestCRUD:
         Returns:
             Список запросов
         """
-        from datetime import datetime, timedelta
+        from datetime import datetime
 
         # Создаем сортировку по приоритету статуса
         status_priority = case(
@@ -727,18 +729,22 @@ class PaymentRequestCRUD:
                 (PaymentRequest.comment.ilike(search_pattern))
             )
 
-        # Фильтр по дате создания
-        if date_filter and date_filter != "all":
-            now = datetime.utcnow()
-            if date_filter == "today":
-                start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                query = query.where(PaymentRequest.created_at >= start_of_day)
-            elif date_filter == "week":
-                week_ago = now - timedelta(days=7)
-                query = query.where(PaymentRequest.created_at >= week_ago)
-            elif date_filter == "month":
-                month_ago = now - timedelta(days=30)
-                query = query.where(PaymentRequest.created_at >= month_ago)
+        # Фильтр по диапазону дат
+        if date_from:
+            try:
+                date_from_obj = datetime.strptime(date_from, "%Y-%m-%d")
+                query = query.where(PaymentRequest.created_at >= date_from_obj)
+            except ValueError:
+                pass  # Игнорируем некорректную дату
+
+        if date_to:
+            try:
+                date_to_obj = datetime.strptime(date_to, "%Y-%m-%d")
+                # Добавляем 1 день чтобы включить весь день
+                date_to_obj = date_to_obj.replace(hour=23, minute=59, second=59, microsecond=999999)
+                query = query.where(PaymentRequest.created_at <= date_to_obj)
+            except ValueError:
+                pass  # Игнорируем некорректную дату
 
         # Фильтр по диапазону сумм
         if amount_min is not None:
@@ -767,7 +773,8 @@ class PaymentRequestCRUD:
         user_id: Optional[int] = None,
         statuses: Optional[List[str]] = None,
         search_query: Optional[str] = None,
-        date_filter: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
         amount_min: Optional[float] = None,
         amount_max: Optional[float] = None,
         creator_id: Optional[int] = None,
@@ -779,7 +786,8 @@ class PaymentRequestCRUD:
             user_id: ID пользователя (для Worker - только свои запросы)
             statuses: Список статусов для фильтрации
             search_query: Текст для поиска по title и comment
-            date_filter: Период создания (today, week, month, all)
+            date_from: Дата начала периода (YYYY-MM-DD)
+            date_to: Дата окончания периода (YYYY-MM-DD)
             amount_min: Минимальная сумма
             amount_max: Максимальная сумма
             creator_id: ID создателя (для Owner/Manager)
@@ -787,7 +795,7 @@ class PaymentRequestCRUD:
         Returns:
             Количество запросов
         """
-        from datetime import datetime, timedelta
+        from datetime import datetime
 
         query = select(func.count(PaymentRequest.id))
 
@@ -822,18 +830,22 @@ class PaymentRequestCRUD:
                 (PaymentRequest.comment.ilike(search_pattern))
             )
 
-        # Фильтр по дате создания
-        if date_filter and date_filter != "all":
-            now = datetime.utcnow()
-            if date_filter == "today":
-                start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                query = query.where(PaymentRequest.created_at >= start_of_day)
-            elif date_filter == "week":
-                week_ago = now - timedelta(days=7)
-                query = query.where(PaymentRequest.created_at >= week_ago)
-            elif date_filter == "month":
-                month_ago = now - timedelta(days=30)
-                query = query.where(PaymentRequest.created_at >= month_ago)
+        # Фильтр по диапазону дат
+        if date_from:
+            try:
+                date_from_obj = datetime.strptime(date_from, "%Y-%m-%d")
+                query = query.where(PaymentRequest.created_at >= date_from_obj)
+            except ValueError:
+                pass  # Игнорируем некорректную дату
+
+        if date_to:
+            try:
+                date_to_obj = datetime.strptime(date_to, "%Y-%m-%d")
+                # Добавляем 1 день чтобы включить весь день
+                date_to_obj = date_to_obj.replace(hour=23, minute=59, second=59, microsecond=999999)
+                query = query.where(PaymentRequest.created_at <= date_to_obj)
+            except ValueError:
+                pass  # Игнорируем некорректную дату
 
         # Фильтр по диапазону сумм
         if amount_min is not None:

@@ -56,7 +56,8 @@ def setup_dashboard_routes(app, config: WebConfig):
         filter: str = "all",
         status: list = None,
         search: str = "",
-        date_filter: str = "all",
+        date_from: str = "",
+        date_to: str = "",
         amount_min: str = "",
         amount_max: str = "",
         creator_id: int = None,
@@ -91,12 +92,12 @@ def setup_dashboard_routes(app, config: WebConfig):
             # Роутинг по ролям
             if role == UserRole.WORKER.value:
                 return await worker_dashboard(
-                    session, user, statuses, search, date_filter,
+                    session, user, statuses, search, date_from, date_to,
                     amount_min_float, amount_max_float, page, per_page, config.bot_token
                 )
             elif role in [UserRole.OWNER.value, UserRole.MANAGER.value]:
                 return await owner_dashboard(
-                    session, user, role, statuses, search, date_filter,
+                    session, user, role, statuses, search, date_from, date_to,
                     amount_min_float, amount_max_float, creator_id, page, per_page, config.bot_token
                 )
 
@@ -104,7 +105,7 @@ def setup_dashboard_routes(app, config: WebConfig):
         return RedirectResponse('/login', status_code=303)
 
     async def worker_dashboard(
-        session, user, statuses, search, date_filter,
+        session, user, statuses, search, date_from, date_to,
         amount_min, amount_max, page, per_page, bot_token
     ):
         """Dashboard для Worker - создание и просмотр своих запросов"""
@@ -114,7 +115,8 @@ def setup_dashboard_routes(app, config: WebConfig):
             user_id=user.id,
             statuses=statuses if len(statuses) > 0 else None,
             search_query=search if search else None,
-            date_filter=date_filter,
+            date_from=date_from if date_from else None,
+            date_to=date_to if date_to else None,
             amount_min=amount_min,
             amount_max=amount_max
         )
@@ -129,7 +131,8 @@ def setup_dashboard_routes(app, config: WebConfig):
             user_id=user.id,
             statuses=statuses if len(statuses) > 0 else None,
             search_query=search if search else None,
-            date_filter=date_filter,
+            date_from=date_from if date_from else None,
+            date_to=date_to if date_to else None,
             amount_min=amount_min,
             amount_max=amount_max,
             skip=skip,
@@ -161,18 +164,22 @@ def setup_dashboard_routes(app, config: WebConfig):
                 cls="stats stats-vertical lg:stats-horizontal shadow w-full mb-4"
             ),
 
-            # Расширенные фильтры
-            card(
-                "Фильтры",
-                advanced_filters(
-                    current_statuses=statuses,
-                    search_query=search,
-                    date_filter=date_filter,
-                    amount_min=str(amount_min) if amount_min else "",
-                    amount_max=str(amount_max) if amount_max else "",
-                    show_creator_filter=False,
-                    per_page=per_page
-                )
+            # Расширенные фильтры (без заголовка)
+            Div(
+                Div(
+                    advanced_filters(
+                        current_statuses=statuses,
+                        search_query=search,
+                        date_from=date_from,
+                        date_to=date_to,
+                        amount_min=str(amount_min) if amount_min else "",
+                        amount_max=str(amount_max) if amount_max else "",
+                        show_creator_filter=False,
+                        per_page=per_page
+                    ),
+                    cls="card-body"
+                ),
+                cls="card bg-base-100 shadow-xl my-4"
             ),
 
             # Таблица с пагинацией
@@ -196,7 +203,7 @@ def setup_dashboard_routes(app, config: WebConfig):
         return page_layout("Worker Dashboard", content, user.display_name, user.role.value, avatar_url)
 
     async def owner_dashboard(
-        session, user, role, statuses, search, date_filter,
+        session, user, role, statuses, search, date_from, date_to,
         amount_min, amount_max, creator_id, page, per_page, bot_token
     ):
         """Dashboard для Owner/Manager - просмотр всех запросов и статистика"""
@@ -208,7 +215,8 @@ def setup_dashboard_routes(app, config: WebConfig):
             session=session,
             statuses=statuses if len(statuses) > 0 else None,
             search_query=search if search else None,
-            date_filter=date_filter,
+            date_from=date_from if date_from else None,
+            date_to=date_to if date_to else None,
             amount_min=amount_min,
             amount_max=amount_max,
             creator_id=creator_id
@@ -223,7 +231,8 @@ def setup_dashboard_routes(app, config: WebConfig):
             session=session,
             statuses=statuses if len(statuses) > 0 else None,
             search_query=search if search else None,
-            date_filter=date_filter,
+            date_from=date_from if date_from else None,
+            date_to=date_to if date_to else None,
             amount_min=amount_min,
             amount_max=amount_max,
             creator_id=creator_id,
@@ -261,20 +270,24 @@ def setup_dashboard_routes(app, config: WebConfig):
                 cls="stats stats-vertical lg:stats-horizontal shadow w-full mb-4"
             ),
 
-            # Расширенные фильтры
-            card(
-                "Фильтры",
-                advanced_filters(
-                    current_statuses=statuses,
-                    search_query=search,
-                    date_filter=date_filter,
-                    amount_min=str(amount_min) if amount_min else "",
-                    amount_max=str(amount_max) if amount_max else "",
-                    creator_id=creator_id,
-                    users=all_users,
-                    show_creator_filter=True,
-                    per_page=per_page
-                )
+            # Расширенные фильтры (без заголовка)
+            Div(
+                Div(
+                    advanced_filters(
+                        current_statuses=statuses,
+                        search_query=search,
+                        date_from=date_from,
+                        date_to=date_to,
+                        amount_min=str(amount_min) if amount_min else "",
+                        amount_max=str(amount_max) if amount_max else "",
+                        creator_id=creator_id,
+                        users=all_users,
+                        show_creator_filter=True,
+                        per_page=per_page
+                    ),
+                    cls="card-body"
+                ),
+                cls="card bg-base-100 shadow-xl my-4"
             ),
 
             # Таблица с пагинацией
