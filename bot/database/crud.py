@@ -1,6 +1,6 @@
 from typing import Optional, List
 from datetime import datetime, date
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func, case, Float
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from .models import User, UserSettings, UserRole, PaymentRequest, PaymentRequestStatus, BillingNotification
@@ -641,6 +641,210 @@ class PaymentRequestCRUD:
                 query = query.where(PaymentRequest.status == PaymentRequestStatus.PAID.value)
             elif status_filter == "cancelled":
                 query = query.where(PaymentRequest.status == PaymentRequestStatus.CANCELLED.value)
+
+        result = await session.execute(query)
+        return result.scalar() or 0
+
+    @staticmethod
+    async def get_payment_requests_advanced(
+        session: AsyncSession,
+        user_id: Optional[int] = None,
+        statuses: Optional[List[str]] = None,
+        search_query: Optional[str] = None,
+        date_filter: Optional[str] = None,
+        amount_min: Optional[float] = None,
+        amount_max: Optional[float] = None,
+        creator_id: Optional[int] = None,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> List[PaymentRequest]:
+        """Получает запросы с расширенными фильтрами
+
+        Args:
+            session: Сессия БД
+            user_id: ID пользователя (для Worker - только свои запросы)
+            statuses: Список статусов для фильтрации
+            search_query: Текст для поиска по title и comment
+            date_filter: Период создания (today, week, month, all)
+            amount_min: Минимальная сумма
+            amount_max: Максимальная сумма
+            creator_id: ID создателя (для Owner/Manager)
+            skip: Сдвиг для пагинации
+            limit: Лимит записей
+
+        Returns:
+            Список запросов
+        """
+        from datetime import datetime, timedelta
+
+        # Создаем сортировку по приоритету статуса
+        status_priority = case(
+            (PaymentRequest.status == PaymentRequestStatus.PENDING.value, 1),
+            (PaymentRequest.status == PaymentRequestStatus.SCHEDULED_TODAY.value, 2),
+            (PaymentRequest.status == PaymentRequestStatus.SCHEDULED_DATE.value, 2),
+            (PaymentRequest.status == PaymentRequestStatus.PAID.value, 3),
+            (PaymentRequest.status == PaymentRequestStatus.CANCELLED.value, 4),
+            else_=5
+        )
+
+        query = (
+            select(PaymentRequest)
+            .options(
+                selectinload(PaymentRequest.created_by),
+                selectinload(PaymentRequest.processing_by),
+                selectinload(PaymentRequest.paid_by),
+            )
+        )
+
+        # Фильтр по пользователю (для Worker)
+        if user_id is not None:
+            query = query.where(PaymentRequest.created_by_id == user_id)
+
+        # Фильтр по статусам (множественный выбор)
+        if statuses and len(statuses) > 0:
+            status_values = []
+            for status in statuses:
+                if status == "pending":
+                    status_values.append(PaymentRequestStatus.PENDING.value)
+                elif status == "scheduled":
+                    status_values.extend([
+                        PaymentRequestStatus.SCHEDULED_TODAY.value,
+                        PaymentRequestStatus.SCHEDULED_DATE.value
+                    ])
+                elif status == "paid":
+                    status_values.append(PaymentRequestStatus.PAID.value)
+                elif status == "cancelled":
+                    status_values.append(PaymentRequestStatus.CANCELLED.value)
+
+            if status_values:
+                query = query.where(PaymentRequest.status.in_(status_values))
+
+        # Поиск по тексту
+        if search_query:
+            search_pattern = f"%{search_query}%"
+            query = query.where(
+                (PaymentRequest.title.ilike(search_pattern)) |
+                (PaymentRequest.comment.ilike(search_pattern))
+            )
+
+        # Фильтр по дате создания
+        if date_filter and date_filter != "all":
+            now = datetime.utcnow()
+            if date_filter == "today":
+                start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                query = query.where(PaymentRequest.created_at >= start_of_day)
+            elif date_filter == "week":
+                week_ago = now - timedelta(days=7)
+                query = query.where(PaymentRequest.created_at >= week_ago)
+            elif date_filter == "month":
+                month_ago = now - timedelta(days=30)
+                query = query.where(PaymentRequest.created_at >= month_ago)
+
+        # Фильтр по диапазону сумм
+        if amount_min is not None:
+            # Конвертируем сумму в строку для сравнения (так как amount хранится как строка)
+            query = query.where(func.cast(func.replace(func.replace(PaymentRequest.amount, ' ', ''), ',', '.'), Float) >= amount_min)
+
+        if amount_max is not None:
+            query = query.where(func.cast(func.replace(func.replace(PaymentRequest.amount, ' ', ''), ',', '.'), Float) <= amount_max)
+
+        # Фильтр по создателю
+        if creator_id is not None:
+            query = query.where(PaymentRequest.created_by_id == creator_id)
+
+        # Сортировка: сначала по приоритету статуса, потом по дате (новые сверху)
+        query = query.order_by(status_priority, PaymentRequest.created_at.desc())
+
+        # Пагинация
+        query = query.offset(skip).limit(limit)
+
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def count_payment_requests_advanced(
+        session: AsyncSession,
+        user_id: Optional[int] = None,
+        statuses: Optional[List[str]] = None,
+        search_query: Optional[str] = None,
+        date_filter: Optional[str] = None,
+        amount_min: Optional[float] = None,
+        amount_max: Optional[float] = None,
+        creator_id: Optional[int] = None,
+    ) -> int:
+        """Подсчитывает количество запросов с расширенными фильтрами
+
+        Args:
+            session: Сессия БД
+            user_id: ID пользователя (для Worker - только свои запросы)
+            statuses: Список статусов для фильтрации
+            search_query: Текст для поиска по title и comment
+            date_filter: Период создания (today, week, month, all)
+            amount_min: Минимальная сумма
+            amount_max: Максимальная сумма
+            creator_id: ID создателя (для Owner/Manager)
+
+        Returns:
+            Количество запросов
+        """
+        from datetime import datetime, timedelta
+
+        query = select(func.count(PaymentRequest.id))
+
+        # Фильтр по пользователю (для Worker)
+        if user_id is not None:
+            query = query.where(PaymentRequest.created_by_id == user_id)
+
+        # Фильтр по статусам (множественный выбор)
+        if statuses and len(statuses) > 0:
+            status_values = []
+            for status in statuses:
+                if status == "pending":
+                    status_values.append(PaymentRequestStatus.PENDING.value)
+                elif status == "scheduled":
+                    status_values.extend([
+                        PaymentRequestStatus.SCHEDULED_TODAY.value,
+                        PaymentRequestStatus.SCHEDULED_DATE.value
+                    ])
+                elif status == "paid":
+                    status_values.append(PaymentRequestStatus.PAID.value)
+                elif status == "cancelled":
+                    status_values.append(PaymentRequestStatus.CANCELLED.value)
+
+            if status_values:
+                query = query.where(PaymentRequest.status.in_(status_values))
+
+        # Поиск по тексту
+        if search_query:
+            search_pattern = f"%{search_query}%"
+            query = query.where(
+                (PaymentRequest.title.ilike(search_pattern)) |
+                (PaymentRequest.comment.ilike(search_pattern))
+            )
+
+        # Фильтр по дате создания
+        if date_filter and date_filter != "all":
+            now = datetime.utcnow()
+            if date_filter == "today":
+                start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                query = query.where(PaymentRequest.created_at >= start_of_day)
+            elif date_filter == "week":
+                week_ago = now - timedelta(days=7)
+                query = query.where(PaymentRequest.created_at >= week_ago)
+            elif date_filter == "month":
+                month_ago = now - timedelta(days=30)
+                query = query.where(PaymentRequest.created_at >= month_ago)
+
+        # Фильтр по диапазону сумм
+        if amount_min is not None:
+            query = query.where(func.cast(func.replace(func.replace(PaymentRequest.amount, ' ', ''), ',', '.'), Float) >= amount_min)
+
+        if amount_max is not None:
+            query = query.where(func.cast(func.replace(func.replace(PaymentRequest.amount, ' ', ''), ',', '.'), Float) <= amount_max)
+
+        # Фильтр по создателю
+        if creator_id is not None:
+            query = query.where(PaymentRequest.created_by_id == creator_id)
 
         result = await session.execute(query)
         return result.scalar() or 0

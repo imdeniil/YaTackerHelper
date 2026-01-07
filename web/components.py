@@ -315,7 +315,7 @@ def card(title: str, *content) -> Div:
     )
 
 
-def filter_tabs(current_filter: str = "all") -> Div:
+def filter_tabs(current_filter: str = "all", per_page: int = 20) -> Div:
     """Фильтры статусов"""
     tabs = [
         ("all", "Все"),
@@ -329,14 +329,177 @@ def filter_tabs(current_filter: str = "all") -> Div:
     for tab_id, tab_label in tabs:
         if tab_id == current_filter:
             tab_items.append(
-                A(tab_label, href=f"/dashboard?filter={tab_id}", cls="btn btn-primary btn-sm")
+                A(tab_label, href=f"/dashboard?filter={tab_id}&page=1&per_page={per_page}", cls="btn btn-primary btn-sm")
             )
         else:
             tab_items.append(
-                A(tab_label, href=f"/dashboard?filter={tab_id}", cls="btn btn-ghost btn-sm")
+                A(tab_label, href=f"/dashboard?filter={tab_id}&page=1&per_page={per_page}", cls="btn btn-ghost btn-sm")
             )
 
     return Div(*tab_items, cls="flex gap-2")
+
+
+def advanced_filters(
+    current_statuses: List[str] = None,
+    search_query: str = "",
+    date_filter: str = "all",
+    amount_min: str = "",
+    amount_max: str = "",
+    creator_id: int = None,
+    users: List = None,
+    show_creator_filter: bool = False,
+    per_page: int = 20
+) -> Form:
+    """Расширенные фильтры с множественным выбором"""
+    current_statuses = current_statuses or []
+
+    return Form(
+        Div(
+            # Левая колонка - Статусы
+            Div(
+                Label("Статусы", cls="label font-bold"),
+                Div(
+                    Label(
+                        Input(
+                            type_="checkbox",
+                            name="status",
+                            value="pending",
+                            checked=("pending" in current_statuses),
+                            cls="checkbox checkbox-sm checkbox-warning"
+                        ),
+                        Span("⏳ Ожидает", cls="ml-2"),
+                        cls="label cursor-pointer justify-start gap-2"
+                    ),
+                    Label(
+                        Input(
+                            type_="checkbox",
+                            name="status",
+                            value="scheduled",
+                            checked=("scheduled" in current_statuses),
+                            cls="checkbox checkbox-sm checkbox-info"
+                        ),
+                        Span("📅 Запланировано", cls="ml-2"),
+                        cls="label cursor-pointer justify-start gap-2"
+                    ),
+                    Label(
+                        Input(
+                            type_="checkbox",
+                            name="status",
+                            value="paid",
+                            checked=("paid" in current_statuses),
+                            cls="checkbox checkbox-sm checkbox-success"
+                        ),
+                        Span("✅ Оплачено", cls="ml-2"),
+                        cls="label cursor-pointer justify-start gap-2"
+                    ),
+                    Label(
+                        Input(
+                            type_="checkbox",
+                            name="status",
+                            value="cancelled",
+                            checked=("cancelled" in current_statuses),
+                            cls="checkbox checkbox-sm checkbox-error"
+                        ),
+                        Span("❌ Отменено", cls="ml-2"),
+                        cls="label cursor-pointer justify-start gap-2"
+                    ),
+                    cls="space-y-1"
+                ),
+                cls="form-control"
+            ),
+
+            # Центральная колонка - Поиск и дата
+            Div(
+                # Поиск
+                Div(
+                    Label("Поиск", cls="label font-bold"),
+                    Input(
+                        type_="text",
+                        name="search",
+                        value=search_query,
+                        placeholder="Название или комментарий...",
+                        cls="input input-sm input-bordered w-full"
+                    ),
+                    cls="form-control mb-3"
+                ),
+
+                # Период
+                Div(
+                    Label("Период создания", cls="label font-bold"),
+                    Select(
+                        Option("Все время", value="all", selected=(date_filter == "all")),
+                        Option("Сегодня", value="today", selected=(date_filter == "today")),
+                        Option("Неделя", value="week", selected=(date_filter == "week")),
+                        Option("Месяц", value="month", selected=(date_filter == "month")),
+                        name="date_filter",
+                        cls="select select-sm select-bordered w-full"
+                    ),
+                    cls="form-control"
+                ),
+                cls="form-control"
+            ),
+
+            # Правая колонка - Сумма и создатель
+            Div(
+                # Диапазон сумм
+                Div(
+                    Label("Сумма (₽)", cls="label font-bold"),
+                    Div(
+                        Input(
+                            type_="number",
+                            name="amount_min",
+                            value=amount_min,
+                            placeholder="От",
+                            cls="input input-sm input-bordered w-full"
+                        ),
+                        Input(
+                            type_="number",
+                            name="amount_max",
+                            value=amount_max,
+                            placeholder="До",
+                            cls="input input-sm input-bordered w-full"
+                        ),
+                        cls="flex gap-2"
+                    ),
+                    cls="form-control mb-3"
+                ),
+
+                # Фильтр по создателю (только для Owner/Manager)
+                Div(
+                    Label("Создатель", cls="label font-bold"),
+                    Select(
+                        Option("Все", value="", selected=(not creator_id)),
+                        *[
+                            Option(
+                                user.display_name,
+                                value=str(user.id),
+                                selected=(creator_id == user.id)
+                            )
+                            for user in (users or [])
+                        ],
+                        name="creator_id",
+                        cls="select select-sm select-bordered w-full"
+                    ),
+                    cls="form-control"
+                ) if show_creator_filter else None,
+
+                cls="form-control"
+            ),
+
+            cls="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4"
+        ),
+
+        # Кнопки
+        Div(
+            Input(type_="hidden", name="per_page", value=str(per_page)),
+            Button("Применить фильтры", type_="submit", cls="btn btn-primary btn-sm"),
+            A("Сбросить", href=f"/dashboard?per_page={per_page}", cls="btn btn-ghost btn-sm"),
+            cls="flex gap-2"
+        ),
+
+        method="GET",
+        action="/dashboard"
+    )
 
 
 def generate_page_numbers(current_page: int, total_pages: int) -> List[tuple]:

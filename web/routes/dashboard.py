@@ -8,7 +8,8 @@ from web.config import WebConfig
 from web.components import (
     page_layout, stat_item, payment_request_table,
     create_payment_form, filter_tabs, user_table, card,
-    payment_request_detail, user_edit_form, user_create_form
+    payment_request_detail, user_edit_form, user_create_form,
+    advanced_filters
 )
 from web.telegram_utils import get_user_profile_photo_url, get_fallback_avatar_url
 from bot.database.models import UserRole, PaymentRequestStatus
@@ -50,7 +51,18 @@ def setup_dashboard_routes(app, config: WebConfig):
 
     @app.get("/dashboard")
     @require_auth
-    async def dashboard(sess, filter: str = "all", page: int = 1, per_page: int = 20):
+    async def dashboard(
+        sess,
+        filter: str = "all",
+        status: list = None,
+        search: str = "",
+        date_filter: str = "all",
+        amount_min: str = "",
+        amount_max: str = "",
+        creator_id: int = None,
+        page: int = 1,
+        per_page: int = 20
+    ):
         """Главная страница dashboard - роутинг по ролям"""
         user_id = sess.get('user_id')
         role = sess.get('role')
@@ -59,6 +71,14 @@ def setup_dashboard_routes(app, config: WebConfig):
         # Валидация параметров
         page = max(1, page)  # Минимум 1
         per_page = per_page if per_page in [10, 25, 50, 100] else 20
+
+        # Преобразуем параметры фильтрации
+        statuses = status if status else []
+        if isinstance(statuses, str):
+            statuses = [statuses]
+
+        amount_min_float = float(amount_min) if amount_min else None
+        amount_max_float = float(amount_max) if amount_max else None
 
         # Получаем пользователя из БД для актуальных данных
         async with get_session() as session:
@@ -70,36 +90,55 @@ def setup_dashboard_routes(app, config: WebConfig):
 
             # Роутинг по ролям
             if role == UserRole.WORKER.value:
-                return await worker_dashboard(session, user, filter, page, per_page, config.bot_token)
+                return await worker_dashboard(
+                    session, user, statuses, search, date_filter,
+                    amount_min_float, amount_max_float, page, per_page, config.bot_token
+                )
             elif role in [UserRole.OWNER.value, UserRole.MANAGER.value]:
-                return await owner_dashboard(session, user, role, filter, page, per_page, config.bot_token)
+                return await owner_dashboard(
+                    session, user, role, statuses, search, date_filter,
+                    amount_min_float, amount_max_float, creator_id, page, per_page, config.bot_token
+                )
 
         # Fallback
         return RedirectResponse('/login', status_code=303)
 
-    async def worker_dashboard(session, user, filter_status, page, per_page, bot_token):
+    async def worker_dashboard(
+        session, user, statuses, search, date_filter,
+        amount_min, amount_max, page, per_page, bot_token
+    ):
         """Dashboard для Worker - создание и просмотр своих запросов"""
-        # Подсчет общего количества записей
-        total_items = await PaymentRequestCRUD.count_user_payment_requests(
-            session, user.id, filter_status
+        # Подсчет общего количества записей с учетом фильтров
+        total_items = await PaymentRequestCRUD.count_payment_requests_advanced(
+            session=session,
+            user_id=user.id,
+            statuses=statuses if len(statuses) > 0 else None,
+            search_query=search if search else None,
+            date_filter=date_filter,
+            amount_min=amount_min,
+            amount_max=amount_max
         )
 
         # Подсчет страниц
         total_pages = (total_items + per_page - 1) // per_page  # Округление вверх
 
-        # Получаем запросы с пагинацией
+        # Получаем запросы с расширенными фильтрами
         skip = (page - 1) * per_page
-        requests = await PaymentRequestCRUD.get_user_payment_requests(
+        requests = await PaymentRequestCRUD.get_payment_requests_advanced(
             session=session,
             user_id=user.id,
-            status_filter=filter_status,
+            statuses=statuses if len(statuses) > 0 else None,
+            search_query=search if search else None,
+            date_filter=date_filter,
+            amount_min=amount_min,
+            amount_max=amount_max,
             skip=skip,
             limit=per_page
         )
 
-        # Статистика (на основе всех запросов пользователя, без пагинации)
-        all_requests = await PaymentRequestCRUD.get_user_payment_requests(
-            session, user.id, status_filter=None, skip=0, limit=10000
+        # Статистика (на основе всех запросов пользователя, без фильтров)
+        all_requests = await PaymentRequestCRUD.get_payment_requests_advanced(
+            session, user_id=user.id, skip=0, limit=10000
         )
         total_amount = sum(float(r.amount.replace(" ", "").replace(",", ".")) for r in all_requests if r.status == PaymentRequestStatus.PAID.value)
         pending_count = len([r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value])
@@ -110,7 +149,7 @@ def setup_dashboard_routes(app, config: WebConfig):
             'total_pages': total_pages,
             'per_page': per_page,
             'total_items': total_items,
-            'filter_status': filter_status
+            'filter_status': 'all'  # Для обратной совместимости
         }
 
         content = Div(
@@ -122,8 +161,19 @@ def setup_dashboard_routes(app, config: WebConfig):
                 cls="stats stats-vertical lg:stats-horizontal shadow w-full mb-4"
             ),
 
-            # Фильтры
-            card("Фильтры", filter_tabs(filter_status)),
+            # Расширенные фильтры
+            card(
+                "Фильтры",
+                advanced_filters(
+                    current_statuses=statuses,
+                    search_query=search,
+                    date_filter=date_filter,
+                    amount_min=str(amount_min) if amount_min else "",
+                    amount_max=str(amount_max) if amount_max else "",
+                    show_creator_filter=False,
+                    per_page=per_page
+                )
+            ),
 
             # Таблица с пагинацией
             Div(
@@ -145,28 +195,45 @@ def setup_dashboard_routes(app, config: WebConfig):
 
         return page_layout("Worker Dashboard", content, user.display_name, user.role.value, avatar_url)
 
-    async def owner_dashboard(session, user, role, filter_status, page, per_page, bot_token):
+    async def owner_dashboard(
+        session, user, role, statuses, search, date_filter,
+        amount_min, amount_max, creator_id, page, per_page, bot_token
+    ):
         """Dashboard для Owner/Manager - просмотр всех запросов и статистика"""
-        # Подсчет общего количества записей
-        total_items = await PaymentRequestCRUD.count_all_payment_requests(
-            session, filter_status
+        # Получаем список всех пользователей для фильтра
+        all_users = await UserCRUD.get_all_users(session)
+
+        # Подсчет общего количества записей с учетом фильтров
+        total_items = await PaymentRequestCRUD.count_payment_requests_advanced(
+            session=session,
+            statuses=statuses if len(statuses) > 0 else None,
+            search_query=search if search else None,
+            date_filter=date_filter,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            creator_id=creator_id
         )
 
         # Подсчет страниц
         total_pages = (total_items + per_page - 1) // per_page  # Округление вверх
 
-        # Получаем запросы с пагинацией
+        # Получаем запросы с расширенными фильтрами
         skip = (page - 1) * per_page
-        requests = await PaymentRequestCRUD.get_all_payment_requests(
+        requests = await PaymentRequestCRUD.get_payment_requests_advanced(
             session=session,
-            status_filter=filter_status,
+            statuses=statuses if len(statuses) > 0 else None,
+            search_query=search if search else None,
+            date_filter=date_filter,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            creator_id=creator_id,
             skip=skip,
             limit=per_page
         )
 
-        # Статистика (на основе всех запросов системы, без пагинации)
-        all_requests = await PaymentRequestCRUD.get_all_payment_requests(
-            session, status_filter=None, skip=0, limit=10000
+        # Статистика (на основе всех запросов системы, без фильтров)
+        all_requests = await PaymentRequestCRUD.get_payment_requests_advanced(
+            session, skip=0, limit=10000
         )
         total_amount = sum(float(r.amount.replace(" ", "").replace(",", ".")) for r in all_requests if r.status == PaymentRequestStatus.PAID.value)
         pending_count = len([r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value])
@@ -181,7 +248,7 @@ def setup_dashboard_routes(app, config: WebConfig):
             'total_pages': total_pages,
             'per_page': per_page,
             'total_items': total_items,
-            'filter_status': filter_status
+            'filter_status': 'all'  # Для обратной совместимости
         }
 
         content = Div(
@@ -194,8 +261,21 @@ def setup_dashboard_routes(app, config: WebConfig):
                 cls="stats stats-vertical lg:stats-horizontal shadow w-full mb-4"
             ),
 
-            # Фильтры
-            card("Фильтры", filter_tabs(filter_status)),
+            # Расширенные фильтры
+            card(
+                "Фильтры",
+                advanced_filters(
+                    current_statuses=statuses,
+                    search_query=search,
+                    date_filter=date_filter,
+                    amount_min=str(amount_min) if amount_min else "",
+                    amount_max=str(amount_max) if amount_max else "",
+                    creator_id=creator_id,
+                    users=all_users,
+                    show_creator_filter=True,
+                    per_page=per_page
+                )
+            ),
 
             # Таблица с пагинацией
             Div(
