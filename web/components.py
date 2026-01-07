@@ -355,17 +355,31 @@ def advanced_filters(
     current_statuses = current_statuses or []
 
     return Form(
+        # Строка поиска с кнопками (на всю ширину)
         Div(
-            # Левая колонка - Статусы (dropdown) и Поиск
+            Input(
+                type="text",
+                name="search",
+                value=search_query,
+                placeholder="🔍 Поиск по названию...",
+                cls="input input-sm input-bordered flex-1"
+            ),
+            Button("Применить", type="submit", cls="btn btn-primary btn-sm"),
+            A("×", href=f"/dashboard?per_page={per_page}", cls="btn btn-ghost btn-sm text-xl", title="Сбросить"),
+            cls="flex gap-2 mb-4"
+        ),
+
+        # Фильтры в три колонки
+        Div(
+            # Левая колонка - Статусы dropdown
             Div(
-                # Dropdown со статусами
                 Details(
                     Summary("Статусы", cls="btn btn-sm btn-outline w-full"),
                     Ul(
                         Li(
                             Label(
                                 Input(
-                                    type_="checkbox",
+                                    type="checkbox",
                                     name="status",
                                     value="pending",
                                     checked=("pending" in current_statuses),
@@ -378,7 +392,7 @@ def advanced_filters(
                         Li(
                             Label(
                                 Input(
-                                    type_="checkbox",
+                                    type="checkbox",
                                     name="status",
                                     value="scheduled",
                                     checked=("scheduled" in current_statuses),
@@ -391,7 +405,7 @@ def advanced_filters(
                         Li(
                             Label(
                                 Input(
-                                    type_="checkbox",
+                                    type="checkbox",
                                     name="status",
                                     value="paid",
                                     checked=("paid" in current_statuses),
@@ -404,7 +418,7 @@ def advanced_filters(
                         Li(
                             Label(
                                 Input(
-                                    type_="checkbox",
+                                    type="checkbox",
                                     name="status",
                                     value="cancelled",
                                     checked=("cancelled" in current_statuses),
@@ -416,18 +430,8 @@ def advanced_filters(
                         ),
                         cls="menu dropdown-content bg-base-100 rounded-box z-[1] w-52 p-2 shadow"
                     ),
-                    cls="dropdown w-full mb-3"
+                    cls="dropdown w-full"
                 ),
-
-                # Поиск
-                Input(
-                    type_="text",
-                    name="search",
-                    value=search_query,
-                    placeholder="🔍 Поиск по названию...",
-                    cls="input input-sm input-bordered w-full"
-                ),
-
                 cls="form-control"
             ),
 
@@ -435,20 +439,20 @@ def advanced_filters(
             Div(
                 Div(
                     Input(
-                        type_="date",
+                        type="date",
                         name="date_from",
                         value=date_from,
-                        placeholder="От",
+                        placeholder="📅 Дата от",
                         cls="input input-sm input-bordered w-full"
                     ),
                     cls="form-control mb-2"
                 ),
                 Div(
                     Input(
-                        type_="date",
+                        type="date",
                         name="date_to",
                         value=date_to,
-                        placeholder="До",
+                        placeholder="📅 Дата до",
                         cls="input input-sm input-bordered w-full"
                     ),
                     cls="form-control"
@@ -461,14 +465,14 @@ def advanced_filters(
                 # Диапазон сумм
                 Div(
                     Input(
-                        type_="number",
+                        type="number",
                         name="amount_min",
                         value=amount_min,
                         placeholder="💰 Сумма от",
                         cls="input input-sm input-bordered w-full mb-2"
                     ),
                     Input(
-                        type_="number",
+                        type="number",
                         name="amount_max",
                         value=amount_max,
                         placeholder="💰 Сумма до",
@@ -498,16 +502,11 @@ def advanced_filters(
                 cls="form-control"
             ),
 
-            cls="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4"
+            cls="grid grid-cols-1 md:grid-cols-3 gap-4"
         ),
 
-        # Кнопки (центрированы по правому краю)
-        Div(
-            Input(type_="hidden", name="per_page", value=str(per_page)),
-            Button("Применить", type_="submit", cls="btn btn-primary btn-sm"),
-            A("Сбросить", href=f"/dashboard?per_page={per_page}", cls="btn btn-ghost btn-sm"),
-            cls="flex gap-2 justify-end"
-        ),
+        # Скрытое поле для сохранения per_page
+        Input(type="hidden", name="per_page", value=str(per_page)),
 
         method="GET",
         action="/dashboard"
