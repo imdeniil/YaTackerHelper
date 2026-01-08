@@ -634,11 +634,18 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                 }
 
                 // Загрузка файла на сервер
-                async function uploadFile(file, statusElementId, fileIdInputId) {
+                async function uploadFile(file, statusElementId, fileIdInputId, inputElement) {
                     const statusElement = document.getElementById(statusElementId);
                     const fileIdInput = document.getElementById(fileIdInputId);
 
-                    if (!file || !statusElement || !fileIdInput) return;
+                    if (!file || !statusElement || !fileIdInput) {
+                        console.error('uploadFile: missing required elements', {
+                            file: !!file,
+                            statusElement: !!statusElement,
+                            fileIdInput: !!fileIdInput
+                        });
+                        return;
+                    }
 
                     try {
                         statusElement.textContent = 'Загрузка...';
@@ -647,25 +654,40 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                         const formData = new FormData();
                         formData.append('file', file);
 
+                        console.log('Uploading file:', file.name, 'size:', file.size);
+
                         const response = await fetch('/api/upload', {
                             method: 'POST',
                             body: formData
                         });
 
+                        console.log('Upload response status:', response.status);
+
+                        if (!response.ok) {
+                            throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+                        }
+
                         const result = await response.json();
+                        console.log('Upload result:', result);
 
                         if (result.success) {
                             fileIdInput.value = result.file_id;
                             statusElement.textContent = '✓ ' + result.filename;
                             statusElement.className = 'text-sm text-green-600';
                         } else {
-                            statusElement.textContent = '✗ Ошибка: ' + result.error;
+                            statusElement.textContent = '✗ Ошибка: ' + (result.error || 'Неизвестная ошибка');
                             statusElement.className = 'text-sm text-red-600';
+                            console.error('Upload failed:', result.error);
                         }
                     } catch (error) {
                         statusElement.textContent = '✗ Ошибка загрузки';
                         statusElement.className = 'text-sm text-red-600';
                         console.error('Error uploading file:', error);
+                    } finally {
+                        // Очищаем input после загрузки для возможности повторной загрузки
+                        if (inputElement) {
+                            inputElement.value = '';
+                        }
                     }
                 }
 
@@ -727,7 +749,7 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                         invoiceFileInput.addEventListener('change', function(event) {
                             const file = event.target.files[0];
                             if (file) {
-                                uploadFile(file, 'modal-invoice-status', 'modal-invoice-file-id');
+                                uploadFile(file, 'modal-invoice-status', 'modal-invoice-file-id', invoiceFileInput);
                             }
                         });
                     }
@@ -737,7 +759,7 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                         paymentFileInput.addEventListener('change', function(event) {
                             const file = event.target.files[0];
                             if (file) {
-                                uploadFile(file, 'modal-payment-status', 'modal-payment-file-id');
+                                uploadFile(file, 'modal-payment-status', 'modal-payment-file-id', paymentFileInput);
                             }
                         });
                     }
