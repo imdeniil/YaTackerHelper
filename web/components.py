@@ -177,13 +177,13 @@ def payment_request_table(requests: List[PaymentRequest], show_creator: bool = F
 
 
 def create_payment_form() -> Form:
-    """Форма создания запроса на оплату"""
+    """Форма создания запроса на оплату (старая версия)"""
     return Form(
         # Название
         Div(
             Label("Название для плательщика", cls="label"),
             Input(
-                type_="text",
+                type="text",
                 name="title",
                 placeholder="Например: Оплата за услуги",
                 required=True,
@@ -196,7 +196,7 @@ def create_payment_form() -> Form:
         Div(
             Label("Сумма (₽)", cls="label"),
             Input(
-                type_="text",
+                type="text",
                 name="amount",
                 placeholder="50000",
                 required=True,
@@ -221,12 +221,224 @@ def create_payment_form() -> Form:
         # Кнопка отправки
         Button(
             "Создать запрос",
-            type_="submit",
+            type="submit",
             cls="btn btn-primary w-full mt-4"
         ),
 
         method="POST",
         action="/payment/create"
+    )
+
+
+def create_payment_modal() -> Div:
+    """Модальное окно для создания запроса на оплату с расширенными полями"""
+    from datetime import datetime
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    return Div(
+        # Модальное окно
+        Dialog(
+            Div(
+                # Заголовок
+                Div(
+                    H3("Создать запрос на оплату", cls="font-bold text-lg"),
+                    Button(
+                        "✕",
+                        type="button",
+                        cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2",
+                        onclick="document.getElementById('create-payment-modal').close()"
+                    ),
+                    cls="relative"
+                ),
+
+                # Форма
+                Form(
+                    # Название
+                    Div(
+                        Label("Название для плательщика", cls="label"),
+                        Input(
+                            type="text",
+                            name="title",
+                            id="modal-title",
+                            placeholder="Например: Оплата за услуги",
+                            required=True,
+                            cls="input input-bordered input-sm w-full"
+                        ),
+                        cls="form-control mb-3"
+                    ),
+
+                    # Сумма
+                    Div(
+                        Label("Сумма (₽)", cls="label"),
+                        Input(
+                            type="text",
+                            name="amount",
+                            id="modal-amount",
+                            placeholder="50000",
+                            required=True,
+                            cls="input input-bordered input-sm w-full"
+                        ),
+                        cls="form-control mb-3"
+                    ),
+
+                    # Комментарий
+                    Div(
+                        Label("Комментарий", cls="label"),
+                        Textarea(
+                            name="comment",
+                            id="modal-comment",
+                            placeholder="Дополнительная информация о платеже...",
+                            required=True,
+                            rows=3,
+                            cls="textarea textarea-bordered textarea-sm w-full"
+                        ),
+                        cls="form-control mb-3"
+                    ),
+
+                    # Даты в две колонки
+                    Div(
+                        # Дата создания
+                        Div(
+                            Label("Дата создания", cls="label"),
+                            Input(
+                                type="text",
+                                name="created_date",
+                                id="modal-created-date",
+                                value=today,
+                                placeholder="YYYY-MM-DD",
+                                cls="input input-bordered input-sm w-full"
+                            ),
+                            cls="form-control"
+                        ),
+                        # Дата оплаты
+                        Div(
+                            Label("Дата оплаты", cls="label"),
+                            Input(
+                                type="text",
+                                name="paid_date",
+                                id="modal-paid-date",
+                                value=today,
+                                placeholder="YYYY-MM-DD",
+                                cls="input input-bordered input-sm w-full"
+                            ),
+                            cls="form-control"
+                        ),
+                        cls="grid grid-cols-2 gap-3 mb-3"
+                    ),
+
+                    # Файлы
+                    Div(
+                        # Счет
+                        Div(
+                            Label("Счет (необязательно)", cls="label"),
+                            Input(
+                                type="file",
+                                name="invoice_file",
+                                id="modal-invoice-file",
+                                accept=".pdf,.jpg,.jpeg,.png",
+                                cls="file-input file-input-bordered file-input-sm w-full"
+                            ),
+                            cls="form-control"
+                        ),
+                        # Платежка
+                        Div(
+                            Label("Платежка (необязательно)", cls="label"),
+                            Input(
+                                type="file",
+                                name="payment_file",
+                                id="modal-payment-file",
+                                accept=".pdf,.jpg,.jpeg,.png",
+                                cls="file-input file-input-bordered file-input-sm w-full"
+                            ),
+                            cls="form-control"
+                        ),
+                        cls="grid grid-cols-2 gap-3 mb-4"
+                    ),
+
+                    # Кнопки действий
+                    Div(
+                        Button(
+                            "Отмена",
+                            type="button",
+                            cls="btn btn-ghost btn-sm",
+                            onclick="document.getElementById('create-payment-modal').close()"
+                        ),
+                        Button(
+                            "Создать",
+                            type="submit",
+                            cls="btn btn-primary btn-sm"
+                        ),
+                        cls="flex justify-end gap-2"
+                    ),
+
+                    method="POST",
+                    action="/payment/create",
+                    enctype="multipart/form-data",
+                    id="create-payment-form"
+                ),
+
+                cls="modal-box max-w-2xl"
+            ),
+            # Backdrop для закрытия при клике вне модального окна
+            Form(
+                method="dialog",
+                cls="modal-backdrop",
+                Button(type="submit", cls="cursor-default")
+            ),
+            id="create-payment-modal",
+            cls="modal"
+        ),
+        id="create-modal-container"
+    )
+
+
+def analytics_modal(stats_items: List) -> Div:
+    """Модальное окно с аналитикой"""
+    return Div(
+        # Модальное окно
+        Dialog(
+            Div(
+                # Заголовок
+                Div(
+                    H3("📊 Аналитика", cls="font-bold text-lg"),
+                    Button(
+                        "✕",
+                        type="button",
+                        cls="btn btn-sm btn-circle btn-ghost absolute right-2 top-2",
+                        onclick="document.getElementById('analytics-modal').close()"
+                    ),
+                    cls="relative mb-4"
+                ),
+
+                # Статистика
+                Div(
+                    *stats_items,
+                    cls="stats stats-vertical lg:stats-horizontal shadow w-full"
+                ),
+
+                # Кнопка закрытия
+                Div(
+                    Button(
+                        "Закрыть",
+                        type="button",
+                        cls="btn btn-ghost btn-sm",
+                        onclick="document.getElementById('analytics-modal').close()"
+                    ),
+                    cls="flex justify-end mt-4"
+                ),
+
+                cls="modal-box max-w-4xl"
+            ),
+            # Backdrop для закрытия при клике вне модального окна
+            Form(
+                method="dialog",
+                cls="modal-backdrop",
+                Button(type="submit", cls="cursor-default")
+            ),
+            id="analytics-modal",
+            cls="modal"
+        ),
+        id="analytics-modal-container"
     )
 
 
@@ -306,6 +518,46 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
             ),
             # Инициализация Flatpickr для календарей и обновление счетчика статусов
             Script("""
+                // Функция открытия модального окна аналитики
+                function openAnalyticsModal() {
+                    const modal = document.getElementById('analytics-modal');
+                    if (modal) {
+                        modal.showModal();
+                    }
+                }
+
+                // Функция открытия модального окна создания запроса
+                function openCreateModal() {
+                    const modal = document.getElementById('create-payment-modal');
+                    if (modal) {
+                        modal.showModal();
+
+                        // Инициализируем Flatpickr для дат в модальном окне если еще не инициализированы
+                        const createdDateInput = document.getElementById('modal-created-date');
+                        const paidDateInput = document.getElementById('modal-paid-date');
+
+                        if (createdDateInput && !createdDateInput._flatpickr) {
+                            flatpickr(createdDateInput, {
+                                locale: 'ru',
+                                dateFormat: 'Y-m-d',
+                                allowInput: true,
+                                clickOpens: true,
+                                theme: 'light'
+                            });
+                        }
+
+                        if (paidDateInput && !paidDateInput._flatpickr) {
+                            flatpickr(paidDateInput, {
+                                locale: 'ru',
+                                dateFormat: 'Y-m-d',
+                                allowInput: true,
+                                clickOpens: true,
+                                theme: 'light'
+                            });
+                        }
+                    }
+                }
+
                 // Функция переключения типа даты
                 function switchDateType(type) {
                     // Обновляем скрытое поле
@@ -696,8 +948,11 @@ def advanced_filters(
                 cls="input input-sm input-bordered flex-1",
                 id="search-input"
             ),
-            Button("Применить", type="submit", cls="btn btn-primary btn-sm", id="apply-filters-btn"),
-            A("×", href=f"/dashboard?per_page={per_page}", cls="btn btn-ghost btn-sm text-xl", title="Сбросить", id="reset-filters-btn"),
+            Button("↵", type="submit", cls="btn btn-primary btn-sm", title="Применить", id="apply-filters-btn"),
+            A("⟲", href=f"/dashboard?per_page={per_page}", cls="btn btn-ghost btn-sm", title="Сбросить", id="reset-filters-btn"),
+            Button("📊", type="button", cls="btn btn-ghost btn-sm", title="Аналитика", id="analytics-btn", onclick="openAnalyticsModal()"),
+            Button("📥", type="button", cls="btn btn-ghost btn-sm", title="Экспорт", id="export-btn", onclick="alert('Функционал экспорта скоро будет добавлен')"),
+            Button("+", type="button", cls="btn btn-success btn-sm", title="Создать запрос", id="create-request-btn", onclick="openCreateModal()"),
             cls="flex gap-2 mb-4"
         ),
 
@@ -845,7 +1100,7 @@ def advanced_filters(
                     Button(
                         "Дата создания",
                         type="button",
-                        cls=f"btn btn-xs {'btn-primary' if date_type == 'created' else 'btn-ghost'} date-type-tab",
+                        cls=f"btn btn-xs flex-1 {'btn-primary' if date_type == 'created' else 'btn-ghost'} date-type-tab",
                         data_date_type="created",
                         id="tab-created",
                         onclick="switchDateType('created')"
@@ -853,12 +1108,12 @@ def advanced_filters(
                     Button(
                         "Дата оплаты",
                         type="button",
-                        cls=f"btn btn-xs {'btn-primary' if date_type == 'paid' else 'btn-ghost'} date-type-tab",
+                        cls=f"btn btn-xs flex-1 {'btn-primary' if date_type == 'paid' else 'btn-ghost'} date-type-tab",
                         data_date_type="paid",
                         id="tab-paid",
                         onclick="switchDateType('paid')"
                     ),
-                    cls="btn-group mb-2 w-full"
+                    cls="flex w-full mb-3"
                 ),
                 # Поля дат в одну строку
                 Div(
@@ -868,7 +1123,7 @@ def advanced_filters(
                         id="date_from_picker",
                         value=date_from,
                         placeholder="📅 От",
-                        cls="input input-sm input-bordered flex-1"
+                        cls="input input-sm input-bordered w-full mb-2"
                     ),
                     Input(
                         type="text",
@@ -876,9 +1131,9 @@ def advanced_filters(
                         id="date_to_picker",
                         value=date_to,
                         placeholder="📅 До",
-                        cls="input input-sm input-bordered flex-1"
+                        cls="input input-sm input-bordered w-full"
                     ),
-                    cls="flex gap-2"
+                    cls="form-control"
                 ),
                 # Скрытое поле для типа даты
                 Input(type="hidden", name="date_type", value=date_type, id="date-type-input"),

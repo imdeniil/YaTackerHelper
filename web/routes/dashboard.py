@@ -7,7 +7,7 @@ from web.database import get_session, UserCRUD, PaymentRequestCRUD
 from web.config import WebConfig
 from web.components import (
     page_layout, stat_item, payment_request_table,
-    create_payment_form, filter_tabs, user_table, card,
+    create_payment_form, create_payment_modal, analytics_modal, filter_tabs, user_table, card,
     payment_request_detail, user_edit_form, user_create_form,
     advanced_filters
 )
@@ -166,15 +166,14 @@ def setup_dashboard_routes(app, config: WebConfig):
             'filter_status': 'all'  # Для обратной совместимости
         }
 
-        content = Div(
-            # Статистика
-            Div(
-                stat_item("Всего запросов", str(len(all_requests)), "📊"),
-                stat_item("Ожидает оплаты", str(pending_count), "⏳"),
-                stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
-                cls="stats stats-vertical lg:stats-horizontal shadow w-full mb-4"
-            ),
+        # Статистика для модального окна
+        stats_items = [
+            stat_item("Всего запросов", str(len(all_requests)), "📊"),
+            stat_item("Ожидает оплаты", str(pending_count), "⏳"),
+            stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰")
+        ]
 
+        content = Div(
             # Расширенные фильтры (без заголовка)
             Div(
                 Div(
@@ -203,8 +202,11 @@ def setup_dashboard_routes(app, config: WebConfig):
                 cls="card bg-base-100 shadow-xl my-4"
             ),
 
-            # Форма создания
-            card("Создать новый запрос", create_payment_form())
+            # Модальное окно создания
+            create_payment_modal(),
+
+            # Модальное окно аналитики
+            analytics_modal(stats_items)
         )
 
         # Получаем аватар из Telegram
@@ -274,16 +276,15 @@ def setup_dashboard_routes(app, config: WebConfig):
             'filter_status': 'all'  # Для обратной совместимости
         }
 
-        content = Div(
-            # Статистика
-            Div(
-                stat_item("Всего запросов", str(len(all_requests)), "📊"),
-                stat_item("Ожидает оплаты", str(pending_count), "⏳"),
-                stat_item("Запланировано", str(scheduled_count), "📅"),
-                stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰"),
-                cls="stats stats-vertical lg:stats-horizontal shadow w-full mb-4"
-            ),
+        # Статистика для модального окна
+        stats_items = [
+            stat_item("Всего запросов", str(len(all_requests)), "📊"),
+            stat_item("Ожидает оплаты", str(pending_count), "⏳"),
+            stat_item("Запланировано", str(scheduled_count), "📅"),
+            stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰")
+        ]
 
+        content = Div(
             # Расширенные фильтры (без заголовка)
             Div(
                 Div(
@@ -312,7 +313,13 @@ def setup_dashboard_routes(app, config: WebConfig):
                     cls="card-body p-3"
                 ),
                 cls="card bg-base-100 shadow-xl my-4"
-            )
+            ),
+
+            # Модальное окно создания
+            create_payment_modal(),
+
+            # Модальное окно аналитики
+            analytics_modal(stats_items)
         )
 
         # Получаем аватар из Telegram
