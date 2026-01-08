@@ -456,12 +456,17 @@ class PaymentRequestCRUD:
                 query = query.where(PaymentRequest.status == PaymentRequestStatus.PAID.value)
             elif status_filter == "cancelled":
                 query = query.where(PaymentRequest.status == PaymentRequestStatus.CANCELLED.value)
+            else:
+                # Прямое сравнение для точных значений статуса (scheduled_today, scheduled_date, etc.)
+                query = query.where(PaymentRequest.status == status_filter)
 
         # Сортировка: сначала по приоритету статуса, потом по дате (новые сверху)
         query = query.order_by(status_priority, PaymentRequest.created_at.desc())
 
-        # Пагинация
-        query = query.offset(skip).limit(limit)
+        # Пагинация (limit=0 означает без лимита)
+        query = query.offset(skip)
+        if limit > 0:
+            query = query.limit(limit)
 
         result = await session.execute(query)
         return list(result.scalars().all())
