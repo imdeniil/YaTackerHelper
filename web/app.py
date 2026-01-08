@@ -31,21 +31,6 @@ app = FastHTML(
     )
 )
 
-# Настраиваем максимальный размер тела запроса (25MB)
-from starlette.middleware import Middleware
-from starlette.middleware.base import BaseHTTPMiddleware
-
-class LargeUploadMiddleware(BaseHTTPMiddleware):
-    """Middleware для поддержки больших загрузок файлов"""
-    async def dispatch(self, request, call_next):
-        # Starlette/FastAPI использует MultiPartParser с лимитом по умолчанию
-        # Переопределяем максимальный размер через атрибуты
-        request.scope['_body'] = b''
-        response = await call_next(request)
-        return response
-
-# Добавляем middleware
-app.add_middleware(LargeUploadMiddleware)
 
 # Импортируем маршруты
 from web.routes.auth import setup_auth_routes
@@ -85,11 +70,9 @@ def serve():
         host=config.host,
         port=config.port,
         log_level="info",
-        limit_max_requests=0,  # Без ограничения на количество запросов
-        timeout_keep_alive=5,
-        # Увеличиваем лимит размера тела запроса до 25MB (для загрузки файлов)
-        limit_concurrency=None,
-        backlog=2048,
+        timeout_keep_alive=30,
+        # h11_max_incomplete_event_size увеличивает лимит для загрузки файлов
+        h11_max_incomplete_event_size=26214400,  # 25MB
     )
 
 
