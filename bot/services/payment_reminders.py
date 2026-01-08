@@ -24,7 +24,7 @@ async def send_reminder_scheduled_today(bot: Bot):
     async with get_session() as session:
         # Получаем все запросы со статусом SCHEDULED_TODAY
         requests = await PaymentRequestCRUD.get_all_payment_requests(
-            session, status=PaymentRequestStatus.SCHEDULED_TODAY.value
+            session, status_filter=PaymentRequestStatus.SCHEDULED_TODAY.value
         )
 
         if not requests:
@@ -92,7 +92,7 @@ async def send_reminder_scheduled_date(bot: Bot):
     async with get_session() as session:
         # Получаем все запросы со статусом SCHEDULED_DATE
         all_scheduled = await PaymentRequestCRUD.get_all_payment_requests(
-            session, status=PaymentRequestStatus.SCHEDULED_DATE.value
+            session, status_filter=PaymentRequestStatus.SCHEDULED_DATE.value
         )
 
         if not all_scheduled:
@@ -169,7 +169,7 @@ async def rollover_scheduled_today(bot: Bot):
     async with get_session() as session:
         # Получаем все запросы со статусом SCHEDULED_TODAY
         requests = await PaymentRequestCRUD.get_all_payment_requests(
-            session, status=PaymentRequestStatus.SCHEDULED_TODAY.value
+            session, status_filter=PaymentRequestStatus.SCHEDULED_TODAY.value
         )
 
         if not requests:
@@ -296,7 +296,7 @@ async def rollover_overdue_scheduled_date(bot: Bot):
     async with get_session() as session:
         # Получаем все запросы со статусом SCHEDULED_DATE
         all_scheduled = await PaymentRequestCRUD.get_all_payment_requests(
-            session, status=PaymentRequestStatus.SCHEDULED_DATE.value
+            session, status_filter=PaymentRequestStatus.SCHEDULED_DATE.value
         )
 
         if not all_scheduled:
@@ -416,7 +416,7 @@ async def send_morning_pending_list(bot: Bot):
     async with get_session() as session:
         # Получаем все PENDING запросы
         pending_requests = await PaymentRequestCRUD.get_all_payment_requests(
-            session, status=PaymentRequestStatus.PENDING.value
+            session, status_filter=PaymentRequestStatus.PENDING.value
         )
 
         if not pending_requests:

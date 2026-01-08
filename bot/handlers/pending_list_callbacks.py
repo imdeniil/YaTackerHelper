@@ -28,7 +28,7 @@ async def on_pending_page(callback: CallbackQuery):
     async with get_session() as session:
         # Получаем все PENDING запросы
         pending_requests = await PaymentRequestCRUD.get_all_payment_requests(
-            session, status=PaymentRequestStatus.PENDING.value
+            session, status_filter=PaymentRequestStatus.PENDING.value
         )
 
         if not pending_requests:
