@@ -48,7 +48,8 @@ async def main():
     dp["config"] = config
 
     # Регистрация middleware
-    dp.update.middleware(AuthMiddleware())
+    dp.message.middleware(AuthMiddleware())
+    dp.callback_query.middleware(AuthMiddleware())
 
     # Регистрация роутеров
     dp.include_router(commands_router)

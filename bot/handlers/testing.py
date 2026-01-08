@@ -18,6 +18,8 @@ async def cmd_testing(message: Message, user=None):
     Тестовое меню для Owner.
     Позволяет вручную запускать задачи scheduler.
     """
+    logger.info(f"cmd_testing called by {message.from_user.id}, user={user}")
+
     # Проверяем что пользователь - Owner
     if not user or user.role != UserRole.OWNER:
         await message.answer("❌ Эта команда доступна только для Owner")
