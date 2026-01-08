@@ -13,7 +13,6 @@ from bot.handlers import commands_router, pending_list_router, testing_router
 from bot.dialogs import (
     main_menu_dialog,
     clone_project_dialog,
-    project_info_dialog,
 )
 
 # Настройка логирования
@@ -55,7 +54,6 @@ async def main():
     # Регистрация диалогов
     dp.include_router(main_menu_dialog)
     dp.include_router(clone_project_dialog)
-    dp.include_router(project_info_dialog)
 
     # Настройка aiogram-dialog
     setup_dialogs(dp)
