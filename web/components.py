@@ -514,7 +514,7 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
             navbar(user_name, role, avatar_url),
             Main(
                 content,
-                cls="container mx-auto px-4 py-8"
+                cls="container mx-auto px-4 py-4"
             ),
             # Инициализация Flatpickr для календарей и обновление счетчика статусов
             Script("""
@@ -804,6 +804,47 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                     updateTable(url);
                 }
 
+                // Функция автоматического применения фильтров
+                function autoApplyFilters() {
+                    const form = document.getElementById('filters-form');
+                    if (form) {
+                        const formData = new FormData(form);
+                        const params = new URLSearchParams();
+
+                        // Добавляем только заполненные параметры
+                        for (const [key, value] of formData.entries()) {
+                            if (value && value.trim() !== '') {
+                                params.append(key, value);
+                            }
+                        }
+
+                        // Убедимся что per_page всегда передается
+                        if (!params.has('per_page')) {
+                            const perPageInput = document.getElementById('per-page-input');
+                            if (perPageInput && perPageInput.value) {
+                                params.set('per_page', perPageInput.value);
+                            } else {
+                                params.set('per_page', '20');
+                            }
+                        }
+
+                        // Сбрасываем на первую страницу при изменении фильтров
+                        params.set('page', '1');
+
+                        const url = '/dashboard?' + params.toString();
+                        updateTable(url);
+                    }
+                }
+
+                // Debounce функция для поиска
+                let searchTimeout;
+                function debounceSearch() {
+                    clearTimeout(searchTimeout);
+                    searchTimeout = setTimeout(function() {
+                        autoApplyFilters();
+                    }, 500); // 500ms задержка
+                }
+
                 document.addEventListener('DOMContentLoaded', function() {
                     // Конфигурация для русской локализации и кастомного стиля
                     const config = {
@@ -811,7 +852,10 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                         dateFormat: 'Y-m-d',
                         allowInput: true,
                         clickOpens: true,
-                        theme: 'light'
+                        theme: 'light',
+                        onChange: function() {
+                            autoApplyFilters(); // Автообновление при изменении даты
+                        }
                     };
 
                     // Инициализация календарей
@@ -836,6 +880,32 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                     const filtersForm = document.getElementById('filters-form');
                     if (filtersForm) {
                         filtersForm.addEventListener('submit', handleFilterSubmit);
+
+                        // Автообновление при изменении чекбоксов статусов
+                        filtersForm.querySelectorAll('input[name="status"]').forEach(function(checkbox) {
+                            checkbox.addEventListener('change', autoApplyFilters);
+                        });
+
+                        // Автообновление при изменении радиокнопок создателя
+                        filtersForm.querySelectorAll('input[name="creator_id"]').forEach(function(radio) {
+                            radio.addEventListener('change', autoApplyFilters);
+                        });
+
+                        // Автообновление при изменении полей сумм (с небольшой задержкой)
+                        const amountMinInput = filtersForm.querySelector('input[name="amount_min"]');
+                        const amountMaxInput = filtersForm.querySelector('input[name="amount_max"]');
+                        if (amountMinInput) {
+                            amountMinInput.addEventListener('input', debounceSearch);
+                        }
+                        if (amountMaxInput) {
+                            amountMaxInput.addEventListener('input', debounceSearch);
+                        }
+
+                        // Автообновление при вводе в поиск (с задержкой)
+                        const searchInput = document.getElementById('search-input');
+                        if (searchInput) {
+                            searchInput.addEventListener('input', debounceSearch);
+                        }
                     }
 
                     // Добавляем обработчик кнопки сброса
@@ -948,11 +1018,11 @@ def advanced_filters(
                 cls="input input-sm input-bordered flex-1",
                 id="search-input"
             ),
-            Button("↵", type="submit", cls="btn btn-primary btn-sm", title="Применить", id="apply-filters-btn"),
+            Button("↵", type="submit", cls="btn btn-outline btn-sm", title="Применить", id="apply-filters-btn"),
             A("⟲", href=f"/dashboard?per_page={per_page}", cls="btn btn-ghost btn-sm", title="Сбросить", id="reset-filters-btn"),
             Button("📊", type="button", cls="btn btn-ghost btn-sm", title="Аналитика", id="analytics-btn", onclick="openAnalyticsModal()"),
             Button("📥", type="button", cls="btn btn-ghost btn-sm", title="Экспорт", id="export-btn", onclick="alert('Функционал экспорта скоро будет добавлен')"),
-            Button("+", type="button", cls="btn btn-success btn-sm", title="Создать запрос", id="create-request-btn", onclick="openCreateModal()"),
+            Button("+", type="button", cls="btn btn-outline btn-sm", title="Создать запрос", id="create-request-btn", onclick="openCreateModal()"),
             cls="flex gap-2 mb-4"
         ),
 
@@ -1123,7 +1193,7 @@ def advanced_filters(
                         id="date_from_picker",
                         value=date_from,
                         placeholder="📅 От",
-                        cls="input input-sm input-bordered w-full mb-2"
+                        cls="input input-sm input-bordered flex-1"
                     ),
                     Input(
                         type="text",
@@ -1131,9 +1201,9 @@ def advanced_filters(
                         id="date_to_picker",
                         value=date_to,
                         placeholder="📅 До",
-                        cls="input input-sm input-bordered w-full"
+                        cls="input input-sm input-bordered flex-1"
                     ),
-                    cls="form-control"
+                    cls="flex gap-2"
                 ),
                 # Скрытое поле для типа даты
                 Input(type="hidden", name="date_type", value=date_type, id="date-type-input"),
