@@ -5,7 +5,6 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
-from bot.database import get_session, UserCRUD
 from bot.database.models import UserRole
 
 logger = logging.getLogger(__name__)
@@ -14,18 +13,15 @@ testing_router = Router(name="testing")
 
 
 @testing_router.message(Command("testing"))
-async def cmd_testing(message: Message):
+async def cmd_testing(message: Message, user=None):
     """
     Тестовое меню для Owner.
     Позволяет вручную запускать задачи scheduler.
     """
     # Проверяем что пользователь - Owner
-    async with get_session() as session:
-        user = await UserCRUD.get_user_by_telegram_id(session, message.from_user.id)
-
-        if not user or user.role != UserRole.OWNER:
-            await message.answer("❌ Эта команда доступна только для Owner")
-            return
+    if not user or user.role != UserRole.OWNER:
+        await message.answer("❌ Эта команда доступна только для Owner")
+        return
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🌅 Утренний список PENDING", callback_data="test_morning_pending")],
@@ -44,13 +40,11 @@ async def cmd_testing(message: Message):
 
 
 @testing_router.callback_query(F.data == "test_morning_pending")
-async def test_morning_pending(callback: CallbackQuery):
+async def test_morning_pending(callback: CallbackQuery, user=None):
     """Ручной запуск утреннего списка PENDING"""
-    async with get_session() as session:
-        user = await UserCRUD.get_user_by_telegram_id(session, callback.from_user.id)
-        if not user or user.role != UserRole.OWNER:
-            await callback.answer("❌ Недостаточно прав", show_alert=True)
-            return
+    if not user or user.role != UserRole.OWNER:
+        await callback.answer("❌ Недостаточно прав", show_alert=True)
+        return
 
     await callback.answer("⏳ Запускаю...")
 
@@ -64,13 +58,11 @@ async def test_morning_pending(callback: CallbackQuery):
 
 
 @testing_router.callback_query(F.data == "test_reminder_today")
-async def test_reminder_today(callback: CallbackQuery):
+async def test_reminder_today(callback: CallbackQuery, user=None):
     """Ручной запуск напоминания SCHEDULED_TODAY"""
-    async with get_session() as session:
-        user = await UserCRUD.get_user_by_telegram_id(session, callback.from_user.id)
-        if not user or user.role != UserRole.OWNER:
-            await callback.answer("❌ Недостаточно прав", show_alert=True)
-            return
+    if not user or user.role != UserRole.OWNER:
+        await callback.answer("❌ Недостаточно прав", show_alert=True)
+        return
 
     await callback.answer("⏳ Запускаю...")
 
@@ -84,13 +76,11 @@ async def test_reminder_today(callback: CallbackQuery):
 
 
 @testing_router.callback_query(F.data == "test_reminder_date")
-async def test_reminder_date(callback: CallbackQuery):
+async def test_reminder_date(callback: CallbackQuery, user=None):
     """Ручной запуск напоминания SCHEDULED_DATE"""
-    async with get_session() as session:
-        user = await UserCRUD.get_user_by_telegram_id(session, callback.from_user.id)
-        if not user or user.role != UserRole.OWNER:
-            await callback.answer("❌ Недостаточно прав", show_alert=True)
-            return
+    if not user or user.role != UserRole.OWNER:
+        await callback.answer("❌ Недостаточно прав", show_alert=True)
+        return
 
     await callback.answer("⏳ Запускаю...")
 
@@ -104,13 +94,11 @@ async def test_reminder_date(callback: CallbackQuery):
 
 
 @testing_router.callback_query(F.data == "test_rollover_today")
-async def test_rollover_today(callback: CallbackQuery):
+async def test_rollover_today(callback: CallbackQuery, user=None):
     """Ручной запуск rollover SCHEDULED_TODAY"""
-    async with get_session() as session:
-        user = await UserCRUD.get_user_by_telegram_id(session, callback.from_user.id)
-        if not user or user.role != UserRole.OWNER:
-            await callback.answer("❌ Недостаточно прав", show_alert=True)
-            return
+    if not user or user.role != UserRole.OWNER:
+        await callback.answer("❌ Недостаточно прав", show_alert=True)
+        return
 
     await callback.answer("⏳ Запускаю...")
 
@@ -124,13 +112,11 @@ async def test_rollover_today(callback: CallbackQuery):
 
 
 @testing_router.callback_query(F.data == "test_rollover_date")
-async def test_rollover_date(callback: CallbackQuery):
+async def test_rollover_date(callback: CallbackQuery, user=None):
     """Ручной запуск rollover просроченных SCHEDULED_DATE"""
-    async with get_session() as session:
-        user = await UserCRUD.get_user_by_telegram_id(session, callback.from_user.id)
-        if not user or user.role != UserRole.OWNER:
-            await callback.answer("❌ Недостаточно прав", show_alert=True)
-            return
+    if not user or user.role != UserRole.OWNER:
+        await callback.answer("❌ Недостаточно прав", show_alert=True)
+        return
 
     await callback.answer("⏳ Запускаю...")
 
