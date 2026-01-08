@@ -634,7 +634,7 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                 }
 
                 // Загрузка файла на сервер
-                async function uploadFile(file, statusElementId, fileIdInputId, inputElement) {
+                async function uploadFile(file, statusElementId, fileIdInputId, inputElement, autoSetStatus = null) {
                     const statusElement = document.getElementById(statusElementId);
                     const fileIdInput = document.getElementById(fileIdInputId);
 
@@ -674,6 +674,28 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                             fileIdInput.value = result.file_id;
                             statusElement.textContent = '✓ ' + result.filename;
                             statusElement.className = 'text-sm text-green-600';
+
+                            // Автоматически устанавливаем статус если указан
+                            if (autoSetStatus) {
+                                const statusSelect = document.getElementById('modal-status');
+                                if (statusSelect) {
+                                    statusSelect.value = autoSetStatus;
+                                    // Блокируем изменение статуса после загрузки платёжки
+                                    statusSelect.disabled = true;
+                                    // Создаём скрытое поле для отправки статуса (disabled не отправляется)
+                                    let hiddenStatus = document.getElementById('modal-status-hidden');
+                                    if (!hiddenStatus) {
+                                        hiddenStatus = document.createElement('input');
+                                        hiddenStatus.type = 'hidden';
+                                        hiddenStatus.id = 'modal-status-hidden';
+                                        hiddenStatus.name = 'status';
+                                        statusSelect.parentNode.appendChild(hiddenStatus);
+                                    }
+                                    hiddenStatus.value = autoSetStatus;
+                                    // Вызываем handleStatusChange для обновления полей дат
+                                    handleStatusChange(autoSetStatus);
+                                }
+                            }
                         } else {
                             statusElement.textContent = '✗ Ошибка: ' + (result.error || 'Неизвестная ошибка');
                             statusElement.className = 'text-sm text-red-600';
@@ -759,7 +781,8 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                         paymentFileInput.addEventListener('change', function(event) {
                             const file = event.target.files[0];
                             if (file) {
-                                uploadFile(file, 'modal-payment-status', 'modal-payment-file-id', paymentFileInput);
+                                // При загрузке платёжки автоматически ставим статус "Оплачен"
+                                uploadFile(file, 'modal-payment-status', 'modal-payment-file-id', paymentFileInput, 'paid');
                             }
                         });
                     }
