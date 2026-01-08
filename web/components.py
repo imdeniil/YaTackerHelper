@@ -381,9 +381,9 @@ def create_payment_modal() -> Div:
             ),
             # Backdrop для закрытия при клике вне модального окна
             Form(
+                Button(type="submit", cls="cursor-default"),
                 method="dialog",
-                cls="modal-backdrop",
-                Button(type="submit", cls="cursor-default")
+                cls="modal-backdrop"
             ),
             id="create-payment-modal",
             cls="modal"
@@ -431,9 +431,9 @@ def analytics_modal(stats_items: List) -> Div:
             ),
             # Backdrop для закрытия при клике вне модального окна
             Form(
+                Button(type="submit", cls="cursor-default"),
                 method="dialog",
-                cls="modal-backdrop",
-                Button(type="submit", cls="cursor-default")
+                cls="modal-backdrop"
             ),
             id="analytics-modal",
             cls="modal"
