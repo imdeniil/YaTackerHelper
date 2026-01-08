@@ -528,6 +528,28 @@ class PaymentRequestCRUD:
         )
 
     @staticmethod
+    async def reset_to_pending(
+        session: AsyncSession,
+        request_id: int,
+    ) -> Optional[PaymentRequest]:
+        """Сбрасывает запрос в статус PENDING (для просроченных SCHEDULED_DATE)
+
+        Args:
+            session: Сессия БД
+            request_id: ID запроса
+
+        Returns:
+            Обновленный запрос или None
+        """
+        return await PaymentRequestCRUD.update_payment_request(
+            session,
+            request_id,
+            status=PaymentRequestStatus.PENDING.value,
+            scheduled_date=None,
+            processing_by_id=None,
+        )
+
+    @staticmethod
     async def mark_as_paid(
         session: AsyncSession,
         request_id: int,

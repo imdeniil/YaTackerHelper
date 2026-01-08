@@ -83,6 +83,112 @@ def get_fallback_avatar_url(display_name: str) -> str:
     return f"https://ui-avatars.com/api/?name={display_name}&background=random"
 
 
+async def send_telegram_message(
+    bot_token: str,
+    chat_id: int,
+    text: str,
+    reply_markup: dict = None
+) -> Optional[int]:
+    """Отправляет сообщение в Telegram чат
+
+    Args:
+        bot_token: Токен Telegram бота
+        chat_id: ID чата для отправки
+        text: Текст сообщения (HTML)
+        reply_markup: Опциональная клавиатура (InlineKeyboardMarkup в формате dict)
+
+    Returns:
+        message_id отправленного сообщения или None в случае ошибки
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            data = {
+                'chat_id': chat_id,
+                'text': text,
+                'parse_mode': 'HTML'
+            }
+
+            if reply_markup:
+                import json
+                data['reply_markup'] = json.dumps(reply_markup)
+
+            response = await client.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                data=data
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Ошибка при отправке сообщения в Telegram: HTTP {response.status_code}")
+                logger.error(f"Response: {response.text}")
+                return None
+
+            result = response.json()
+
+            if not result.get("ok"):
+                logger.error(f"Telegram API вернул ошибку: {result.get('description')}")
+                return None
+
+            message_id = result.get("result", {}).get("message_id")
+            logger.info(f"Сообщение успешно отправлено в чат {chat_id}, message_id: {message_id}")
+            return message_id
+
+    except Exception as e:
+        logger.error(f"Ошибка при отправке сообщения в Telegram: {e}")
+        return None
+
+
+async def send_telegram_document(
+    bot_token: str,
+    chat_id: int,
+    document_file_id: str,
+    caption: str = None
+) -> Optional[int]:
+    """Отправляет документ по file_id в Telegram чат
+
+    Args:
+        bot_token: Токен Telegram бота
+        chat_id: ID чата для отправки
+        document_file_id: file_id документа в Telegram
+        caption: Опциональная подпись к документу
+
+    Returns:
+        message_id отправленного сообщения или None в случае ошибки
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            data = {
+                'chat_id': chat_id,
+                'document': document_file_id
+            }
+
+            if caption:
+                data['caption'] = caption
+
+            response = await client.post(
+                f"https://api.telegram.org/bot{bot_token}/sendDocument",
+                data=data
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Ошибка при отправке документа в Telegram: HTTP {response.status_code}")
+                logger.error(f"Response: {response.text}")
+                return None
+
+            result = response.json()
+
+            if not result.get("ok"):
+                logger.error(f"Telegram API вернул ошибку: {result.get('description')}")
+                return None
+
+            message_id = result.get("result", {}).get("message_id")
+            logger.info(f"Документ успешно отправлен в чат {chat_id}, message_id: {message_id}")
+            return message_id
+
+    except Exception as e:
+        logger.error(f"Ошибка при отправке документа в Telegram: {e}")
+        return None
+
+
 async def upload_file_to_storage(
     bot_token: str,
     storage_chat_id: int,

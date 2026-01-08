@@ -3,12 +3,15 @@
 import logging
 from datetime import date, datetime
 from aiogram import Bot
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from bot.database import get_session, PaymentRequestCRUD, PaymentRequestStatus
+from bot.database import get_session, PaymentRequestCRUD, PaymentRequestStatus, UserCRUD
 from bot.handlers.payment_callbacks import format_payment_request_message, get_payment_request_keyboard
 
 logger = logging.getLogger(__name__)
 
+# Количество платежей на странице в утренней рассылке
+PENDING_PAGE_SIZE = 5
 
 async def send_reminder_scheduled_today(bot: Bot):
     """Отправляет напоминания по запросам со статусом SCHEDULED_TODAY в 18:00 МСК
@@ -276,5 +279,201 @@ async def rollover_scheduled_today(bot: Bot):
             except Exception as e:
                 logger.error(
                     f"Error processing rollover for payment request #{payment_request.id}: {e}",
+                    exc_info=True
+                )
+
+
+async def rollover_overdue_scheduled_date(bot: Bot):
+    """Переводит просроченные SCHEDULED_DATE в PENDING в 10:00 МСК
+
+    Если scheduled_date < сегодня, то статус меняется на PENDING,
+    чтобы запрос снова появился в утреннем списке.
+    """
+    logger.info("Running rollover check for overdue SCHEDULED_DATE payments...")
+
+    today = date.today()
+
+    async with get_session() as session:
+        # Получаем все запросы со статусом SCHEDULED_DATE
+        all_scheduled = await PaymentRequestCRUD.get_all_payment_requests(
+            session, status=PaymentRequestStatus.SCHEDULED_DATE.value
+        )
+
+        if not all_scheduled:
+            logger.info("No SCHEDULED_DATE payments found")
+            return
+
+        # Фильтруем просроченные (scheduled_date < сегодня)
+        overdue_requests = [r for r in all_scheduled if r.scheduled_date and r.scheduled_date < today]
+
+        if not overdue_requests:
+            logger.info("No overdue SCHEDULED_DATE payments found")
+            return
+
+        logger.info(f"Found {len(overdue_requests)} overdue SCHEDULED_DATE payment(s)")
+
+        for payment_request in overdue_requests:
+            try:
+                # Переводим в статус PENDING
+                await PaymentRequestCRUD.reset_to_pending(session, payment_request.id)
+
+                logger.info(
+                    f"Payment request #{payment_request.id} reset to PENDING "
+                    f"(was scheduled for {payment_request.scheduled_date})"
+                )
+
+                # Уведомляем Worker о переносе
+                if payment_request.created_by.telegram_id:
+                    worker_text = (
+                        f"⚠️ <b>Запрос на оплату #{payment_request.id} просрочен</b>\n\n"
+                        f"<b>Название:</b> {payment_request.title}\n"
+                        f"<b>Сумма:</b> {payment_request.amount} ₽\n"
+                        f"<b>Был запланирован на:</b> {payment_request.scheduled_date.strftime('%d.%m.%Y')}\n\n"
+                        f"Запрос возвращён в статус ожидания."
+                    )
+
+                    await bot.send_message(
+                        chat_id=payment_request.created_by.telegram_id,
+                        text=worker_text,
+                    )
+
+                # Уведомляем billing контакт (если был назначен)
+                if payment_request.processing_by and payment_request.processing_by.telegram_id:
+                    billing_text = (
+                        f"⚠️ <b>Запрос на оплату #{payment_request.id} просрочен</b>\n\n"
+                        f"<b>Название:</b> {payment_request.title}\n"
+                        f"<b>Сумма:</b> {payment_request.amount} ₽\n"
+                        f"<b>Был запланирован на:</b> {payment_request.scheduled_date.strftime('%d.%m.%Y')}\n\n"
+                        f"Запрос возвращён в статус ожидания и появится в утреннем списке."
+                    )
+
+                    await bot.send_message(
+                        chat_id=payment_request.processing_by.telegram_id,
+                        text=billing_text,
+                    )
+
+            except Exception as e:
+                logger.error(
+                    f"Error resetting payment request #{payment_request.id} to PENDING: {e}",
+                    exc_info=True
+                )
+
+
+def _build_pending_list_keyboard(
+    requests: list,
+    page: int,
+    total_pages: int,
+    billing_user_id: int
+) -> InlineKeyboardMarkup:
+    """Строит клавиатуру для списка PENDING платежей с пагинацией
+
+    Args:
+        requests: Список запросов на текущей странице
+        page: Текущая страница (0-indexed)
+        total_pages: Общее количество страниц
+        billing_user_id: ID billing контакта для callback_data
+    """
+    buttons = []
+
+    # Кнопки для каждого запроса
+    for req in requests:
+        title_short = req.title[:20] + "..." if len(req.title) > 20 else req.title
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"⏳ #{req.id} | {req.amount} ₽ | {title_short}",
+                callback_data=f"pending_select:{req.id}"
+            )
+        ])
+
+    # Пагинация
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(
+            InlineKeyboardButton(text="◀️", callback_data=f"pending_page:{page - 1}")
+        )
+    nav_buttons.append(
+        InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="pending_noop")
+    )
+    if page < total_pages - 1:
+        nav_buttons.append(
+            InlineKeyboardButton(text="▶️", callback_data=f"pending_page:{page + 1}")
+        )
+
+    if nav_buttons:
+        buttons.append(nav_buttons)
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+async def send_morning_pending_list(bot: Bot):
+    """Отправляет утренний список PENDING платежей всем billing контактам в 09:00 МСК
+
+    Каждый billing контакт получает список всех ожидающих платежей
+    с возможностью выбрать и отреагировать на каждый.
+    """
+    logger.info("Running morning PENDING list distribution...")
+
+    async with get_session() as session:
+        # Получаем все PENDING запросы
+        pending_requests = await PaymentRequestCRUD.get_all_payment_requests(
+            session, status=PaymentRequestStatus.PENDING.value
+        )
+
+        if not pending_requests:
+            logger.info("No PENDING payments for morning distribution")
+            return
+
+        logger.info(f"Found {len(pending_requests)} PENDING payment(s) for morning distribution")
+
+        # Получаем всех billing контактов
+        billing_contacts = await UserCRUD.get_billing_contacts(session)
+
+        if not billing_contacts:
+            logger.warning("No billing contacts found for morning distribution")
+            return
+
+        # Сортируем по дате создания (старые первые)
+        pending_requests.sort(key=lambda x: x.created_at)
+
+        total_amount = sum(
+            float(req.amount.replace(" ", "").replace(",", "."))
+            for req in pending_requests
+            if req.amount
+        )
+
+        # Первая страница
+        page = 0
+        total_pages = (len(pending_requests) + PENDING_PAGE_SIZE - 1) // PENDING_PAGE_SIZE
+        page_requests = pending_requests[:PENDING_PAGE_SIZE]
+
+        # Формируем сообщение
+        message_text = (
+            f"🌅 <b>Доброе утро! Ожидающие платежи</b>\n\n"
+            f"📊 Всего запросов: <b>{len(pending_requests)}</b>\n"
+            f"💰 Общая сумма: <b>{total_amount:,.0f} ₽</b>\n\n"
+            f"Выберите запрос для действия:"
+        )
+
+        # Отправляем каждому billing контакту
+        for billing_contact in billing_contacts:
+            if not billing_contact.telegram_id:
+                continue
+
+            try:
+                keyboard = _build_pending_list_keyboard(
+                    page_requests, page, total_pages, billing_contact.id
+                )
+
+                await bot.send_message(
+                    chat_id=billing_contact.telegram_id,
+                    text=message_text,
+                    reply_markup=keyboard,
+                )
+
+                logger.info(f"Morning PENDING list sent to {billing_contact.telegram_username}")
+
+            except Exception as e:
+                logger.error(
+                    f"Error sending morning PENDING list to {billing_contact.telegram_username}: {e}",
                     exc_info=True
                 )

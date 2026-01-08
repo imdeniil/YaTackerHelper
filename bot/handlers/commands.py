@@ -1,5 +1,6 @@
 """Обработчики команд бота."""
 
+import logging
 from aiogram import Router, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message, CallbackQuery
@@ -7,6 +8,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram_dialog import DialogManager, StartMode
 
 from bot.states import MainMenu
+
+logger = logging.getLogger(__name__)
 
 router = Router(name="commands")
 

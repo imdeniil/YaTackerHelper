@@ -10,6 +10,8 @@ from .payment_reminders import (
     send_reminder_scheduled_today,
     send_reminder_scheduled_date,
     rollover_scheduled_today,
+    rollover_overdue_scheduled_date,
+    send_morning_pending_list,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,6 +70,28 @@ def start_scheduler(bot: Bot):
         replace_existing=True,
     )
     logger.info("Scheduled rollover_scheduled_today at 10:00 MSK")
+
+    # Задача 4: Перевод просроченных SCHEDULED_DATE в PENDING в 09:00 МСК
+    scheduler.add_job(
+        rollover_overdue_scheduled_date,
+        trigger=CronTrigger(hour=9, minute=0, timezone=MSK),
+        args=[bot],
+        id='rollover_overdue_scheduled_date',
+        name='Rollover overdue SCHEDULED_DATE to PENDING at 09:00 MSK',
+        replace_existing=True,
+    )
+    logger.info("Scheduled rollover_overdue_scheduled_date at 09:00 MSK")
+
+    # Задача 5: Утренняя рассылка списка PENDING платежей в 09:05 МСК
+    scheduler.add_job(
+        send_morning_pending_list,
+        trigger=CronTrigger(hour=9, minute=5, timezone=MSK),
+        args=[bot],
+        id='morning_pending_list',
+        name='Morning PENDING list distribution at 09:05 MSK',
+        replace_existing=True,
+    )
+    logger.info("Scheduled morning_pending_list at 09:05 MSK")
 
     # Запускаем scheduler
     scheduler.start()

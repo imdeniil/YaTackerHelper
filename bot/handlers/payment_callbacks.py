@@ -396,27 +396,38 @@ async def on_payment_schedule_today(callback: CallbackQuery):
             except Exception as e:
                 logger.error(f"Error updating billing notification {notification.id}: {e}")
 
-        # Обновляем сообщение Worker (вместо создания нового)
-        if payment_request.worker_message_id and payment_request.created_by.telegram_id:
-            try:
-                worker_text = format_payment_request_message(
-                    request_id=payment_request.id,
-                    title=payment_request.title,
-                    amount=payment_request.amount,
-                    comment=payment_request.comment,
-                    created_by_name=payment_request.created_by.display_name,
-                    status=payment_request.status,
-                    created_at=payment_request.created_at,
-                    processing_by_name=user.display_name,
-                )
+        # Уведомляем Worker об изменении статуса
+        if payment_request.created_by.telegram_id:
+            worker_text = format_payment_request_message(
+                request_id=payment_request.id,
+                title=payment_request.title,
+                amount=payment_request.amount,
+                comment=payment_request.comment,
+                created_by_name=payment_request.created_by.display_name,
+                status=payment_request.status,
+                created_at=payment_request.created_at,
+                processing_by_name=user.display_name,
+            )
 
-                await callback.bot.edit_message_text(
-                    chat_id=payment_request.created_by.telegram_id,
-                    message_id=payment_request.worker_message_id,
-                    text=worker_text,
-                )
-            except Exception as e:
-                logger.error(f"Error updating worker message: {e}")
+            if payment_request.worker_message_id:
+                # Редактируем существующее сообщение (создано через бота)
+                try:
+                    await callback.bot.edit_message_text(
+                        chat_id=payment_request.created_by.telegram_id,
+                        message_id=payment_request.worker_message_id,
+                        text=worker_text,
+                    )
+                except Exception as e:
+                    logger.error(f"Error updating worker message: {e}")
+            else:
+                # Отправляем новое сообщение (создано через веб)
+                try:
+                    await callback.bot.send_message(
+                        chat_id=payment_request.created_by.telegram_id,
+                        text=worker_text,
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending worker notification: {e}")
 
     await callback.answer(
         f"✅ Запрос #{request_id} запланирован на сегодня!\nВы получите напоминание в 18:00 МСК.",
@@ -518,28 +529,39 @@ async def on_date_input(message: Message, state: FSMContext):
             except Exception as e:
                 logger.error(f"Error updating billing notification {notification.id}: {e}")
 
-        # Обновляем сообщение Worker (вместо создания нового)
-        if payment_request.worker_message_id and payment_request.created_by.telegram_id:
-            try:
-                worker_text = format_payment_request_message(
-                    request_id=payment_request.id,
-                    title=payment_request.title,
-                    amount=payment_request.amount,
-                    comment=payment_request.comment,
-                    created_by_name=payment_request.created_by.display_name,
-                    status=payment_request.status,
-                    created_at=payment_request.created_at,
-                    processing_by_name=user.display_name,
-                    scheduled_date=scheduled_date,
-                )
+        # Уведомляем Worker об изменении статуса
+        if payment_request.created_by.telegram_id:
+            worker_text = format_payment_request_message(
+                request_id=payment_request.id,
+                title=payment_request.title,
+                amount=payment_request.amount,
+                comment=payment_request.comment,
+                created_by_name=payment_request.created_by.display_name,
+                status=payment_request.status,
+                created_at=payment_request.created_at,
+                processing_by_name=user.display_name,
+                scheduled_date=scheduled_date,
+            )
 
-                await message.bot.edit_message_text(
-                    chat_id=payment_request.created_by.telegram_id,
-                    message_id=payment_request.worker_message_id,
-                    text=worker_text,
-                )
-            except Exception as e:
-                logger.error(f"Error updating worker message: {e}")
+            if payment_request.worker_message_id:
+                # Редактируем существующее сообщение (создано через бота)
+                try:
+                    await message.bot.edit_message_text(
+                        chat_id=payment_request.created_by.telegram_id,
+                        message_id=payment_request.worker_message_id,
+                        text=worker_text,
+                    )
+                except Exception as e:
+                    logger.error(f"Error updating worker message: {e}")
+            else:
+                # Отправляем новое сообщение (создано через веб)
+                try:
+                    await message.bot.send_message(
+                        chat_id=payment_request.created_by.telegram_id,
+                        text=worker_text,
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending worker notification: {e}")
 
         await message.answer(
             f"✅ Запрос #{request_id} запланирован на {scheduled_date.strftime('%d.%m.%Y')}!\n"
