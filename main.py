@@ -11,7 +11,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram_dialog import setup_dialogs
 
 from bot.config import BotConfig
-from bot.handlers import commands_router, payment_callbacks_router
+from bot.handlers import commands_router, payment_callbacks_router, pending_list_router, testing_router
 from bot.dialogs import (
     main_menu_dialog,
     clone_project_dialog,
@@ -126,7 +126,9 @@ async def main(reset_database: bool = False, confirm_reset: bool = False, contin
 
     # Регистрация роутеров
     dp.include_router(unknown_intent_router)  # Error handler должен быть первым
+    dp.include_router(testing_router)  # Testing menu для Owner
     dp.include_router(commands_router)
+    dp.include_router(pending_list_router)  # Callbacks для утреннего списка PENDING
     dp.include_router(payment_callbacks_router)
 
     # Регистрация диалогов
