@@ -9,7 +9,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram_dialog import setup_dialogs
 
 from bot.config import BotConfig
-from bot.handlers import commands_router, pending_list_router, testing_router
+from bot.handlers import commands_router, pending_list_router, testing_router, payment_callbacks_router
 from bot.dialogs import (
     main_menu_dialog,
     clone_project_dialog,
@@ -50,6 +50,7 @@ async def main():
     dp.include_router(commands_router)
     dp.include_router(pending_list_router)
     dp.include_router(testing_router)
+    dp.include_router(payment_callbacks_router)
 
     # Регистрация диалогов
     dp.include_router(main_menu_dialog)
