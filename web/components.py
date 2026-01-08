@@ -745,6 +745,36 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                                     // Очищаем форму
                                     createForm.reset();
 
+                                    // Сбрасываем скрытые поля file_id
+                                    const invoiceFileId = document.getElementById('modal-invoice-file-id');
+                                    if (invoiceFileId) invoiceFileId.value = '';
+                                    const paymentFileId = document.getElementById('modal-payment-file-id');
+                                    if (paymentFileId) paymentFileId.value = '';
+
+                                    // Сбрасываем статусы загрузки файлов
+                                    const invoiceStatus = document.getElementById('modal-invoice-status');
+                                    if (invoiceStatus) {
+                                        invoiceStatus.textContent = '';
+                                        invoiceStatus.className = 'text-sm';
+                                    }
+                                    const paymentStatus = document.getElementById('modal-payment-status');
+                                    if (paymentStatus) {
+                                        paymentStatus.textContent = '';
+                                        paymentStatus.className = 'text-sm';
+                                    }
+
+                                    // Разблокируем селектор статуса и удаляем скрытое поле
+                                    const statusSelect = document.getElementById('modal-status');
+                                    if (statusSelect) {
+                                        statusSelect.disabled = false;
+                                        statusSelect.value = 'pending';
+                                    }
+                                    const hiddenStatus = document.getElementById('modal-status-hidden');
+                                    if (hiddenStatus) hiddenStatus.remove();
+
+                                    // Сбрасываем поля дат
+                                    handleStatusChange('pending');
+
                                     // Обновляем таблицу
                                     const currentParams = new URLSearchParams(window.location.search);
                                     const url = '/dashboard?' + currentParams.toString();
