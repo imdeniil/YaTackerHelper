@@ -81,3 +81,63 @@ def get_fallback_avatar_url(display_name: str) -> str:
         URL аватара
     """
     return f"https://ui-avatars.com/api/?name={display_name}&background=random"
+
+
+async def upload_file_to_storage(
+    bot_token: str,
+    storage_chat_id: int,
+    file_bytes: bytes,
+    filename: str
+) -> Optional[str]:
+    """Загружает файл в служебный чат Telegram и возвращает file_id
+
+    Args:
+        bot_token: Токен Telegram бота
+        storage_chat_id: ID приватной группы для хранения файлов
+        file_bytes: Байты файла
+        filename: Имя файла
+
+    Returns:
+        file_id от Telegram или None в случае ошибки
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Формируем multipart/form-data для отправки файла
+            files = {
+                'document': (filename, file_bytes)
+            }
+            data = {
+                'chat_id': storage_chat_id
+            }
+
+            # Отправляем файл в служебный чат
+            response = await client.post(
+                f"https://api.telegram.org/bot{bot_token}/sendDocument",
+                files=files,
+                data=data
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Ошибка при загрузке файла в Telegram: HTTP {response.status_code}")
+                logger.error(f"Response: {response.text}")
+                return None
+
+            result = response.json()
+
+            if not result.get("ok"):
+                logger.error(f"Telegram API вернул ошибку: {result.get('description')}")
+                return None
+
+            # Извлекаем file_id из ответа
+            file_id = result.get("result", {}).get("document", {}).get("file_id")
+
+            if not file_id:
+                logger.error(f"file_id не найден в ответе Telegram API")
+                return None
+
+            logger.info(f"Файл {filename} успешно загружен в storage_chat, file_id: {file_id}")
+            return file_id
+
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке файла {filename} в Telegram: {e}")
+        return None

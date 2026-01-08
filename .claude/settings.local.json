@@ -48,7 +48,8 @@
       "Bash(dir \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\dialogs\\clone_project\")",
       "Bash(dir /B \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\dialogs\\*.py\")",
       "Bash(powershell -Command:*)",
-      "mcp__context7__query-docs"
+      "mcp__context7__query-docs",
+      "Bash(powershell -Command \"(Get-Content ''C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\web\\routes\\dashboard.py'' | Measure-Object -Line).Lines\")"
     ],
     "deny": [],
     "ask": []

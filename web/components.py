@@ -230,10 +230,17 @@ def create_payment_form() -> Form:
     )
 
 
-def create_payment_modal() -> Div:
-    """Модальное окно для создания запроса на оплату с расширенными полями"""
+def create_payment_modal(user_role: str = "worker") -> Div:
+    """Модальное окно для создания запроса на оплату с разными полями по ролям
+
+    Args:
+        user_role: Роль пользователя (worker, manager, owner)
+    """
     from datetime import datetime
     today = datetime.now().strftime("%Y-%m-%d")
+
+    # Определяем доступные поля для роли
+    is_manager_or_owner = user_role.lower() in ["manager", "owner"]
 
     return Div(
         # Модальное окно
@@ -289,70 +296,102 @@ def create_payment_modal() -> Div:
                             id="modal-comment",
                             placeholder="Дополнительная информация о платеже...",
                             required=True,
-                            rows=3,
+                            rows=4,
                             cls="textarea textarea-bordered textarea-sm w-full"
                         ),
                         cls="form-control mb-3"
                     ),
 
-                    # Даты в две колонки
+                    # Файл счета (для всех ролей)
                     Div(
-                        # Дата создания
-                        Div(
-                            Label("Дата создания", cls="label"),
-                            Input(
-                                type="text",
-                                name="created_date",
-                                id="modal-created-date",
-                                value=today,
-                                placeholder="YYYY-MM-DD",
-                                cls="input input-bordered input-sm w-full"
-                            ),
-                            cls="form-control"
+                        Label("Счет (необязательно)", cls="label"),
+                        Input(
+                            type="file",
+                            id="modal-invoice-file",
+                            accept=".pdf,.jpg,.jpeg,.png",
+                            cls="file-input file-input-bordered file-input-sm w-full"
                         ),
-                        # Дата оплаты
-                        Div(
-                            Label("Дата оплаты", cls="label"),
-                            Input(
-                                type="text",
-                                name="paid_date",
-                                id="modal-paid-date",
-                                value=today,
-                                placeholder="YYYY-MM-DD",
-                                cls="input input-bordered input-sm w-full"
-                            ),
-                            cls="form-control"
-                        ),
-                        cls="grid grid-cols-2 gap-3 mb-3"
-                    ),
+                        Input(type="hidden", name="invoice_file_id", id="modal-invoice-file-id", value=""),
+                        Span("", id="modal-invoice-status", cls="text-sm text-gray-500"),
+                        cls="form-control mb-3"
+                    ) if True else None,  # Всегда показываем для всех
 
-                    # Файлы
-                    Div(
-                        # Счет
-                        Div(
-                            Label("Счет (необязательно)", cls="label"),
-                            Input(
-                                type="file",
-                                name="invoice_file",
-                                id="modal-invoice-file",
-                                accept=".pdf,.jpg,.jpeg,.png",
-                                cls="file-input file-input-bordered file-input-sm w-full"
+                    # Дополнительные поля для Manager/Owner
+                    *(
+                        [
+                            # Файл платежки
+                            Div(
+                                Label("Платежка (необязательно)", cls="label"),
+                                Input(
+                                    type="file",
+                                    id="modal-payment-file",
+                                    accept=".pdf,.jpg,.jpeg,.png",
+                                    cls="file-input file-input-bordered file-input-sm w-full"
+                                ),
+                                Input(type="hidden", name="payment_file_id", id="modal-payment-file-id", value=""),
+                                Span("", id="modal-payment-status", cls="text-sm text-gray-500"),
+                                cls="form-control mb-3"
                             ),
-                            cls="form-control"
-                        ),
-                        # Платежка
-                        Div(
-                            Label("Платежка (необязательно)", cls="label"),
-                            Input(
-                                type="file",
-                                name="payment_file",
-                                id="modal-payment-file",
-                                accept=".pdf,.jpg,.jpeg,.png",
-                                cls="file-input file-input-bordered file-input-sm w-full"
+
+                            # Дата создания
+                            Div(
+                                Label("Дата создания", cls="label"),
+                                Input(
+                                    type="text",
+                                    name="created_date",
+                                    id="modal-created-date",
+                                    value=today,
+                                    placeholder="YYYY-MM-DD",
+                                    cls="input input-bordered input-sm w-full"
+                                ),
+                                cls="form-control mb-3"
                             ),
-                            cls="form-control"
-                        ),
-                        cls="grid grid-cols-2 gap-3 mb-4"
+
+                            # Статус
+                            Div(
+                                Label("Статус", cls="label"),
+                                Select(
+                                    Option("⏳ Ожидает", value="pending", selected=True),
+                                    Option("✅ Оплачено", value="paid"),
+                                    Option("📅 Запланирован", value="scheduled"),
+                                    name="status",
+                                    id="modal-status",
+                                    cls="select select-bordered select-sm w-full",
+                                    onchange="handleStatusChange(this.value)"
+                                ),
+                                cls="form-control mb-3"
+                            ),
+
+                            # Дата оплаты (показывается если статус = paid)
+                            Div(
+                                Label("Дата оплаты", cls="label"),
+                                Input(
+                                    type="text",
+                                    name="paid_date",
+                                    id="modal-paid-date",
+                                    value=today,
+                                    placeholder="YYYY-MM-DD",
+                                    cls="input input-bordered input-sm w-full"
+                                ),
+                                cls="form-control mb-3 hidden",
+                                id="modal-paid-date-container"
+                            ),
+
+                            # Дата планирования (показывается если статус = scheduled)
+                            Div(
+                                Label("Дата планирования", cls="label"),
+                                Input(
+                                    type="text",
+                                    name="scheduled_date",
+                                    id="modal-scheduled-date",
+                                    value=today,
+                                    placeholder="YYYY-MM-DD",
+                                    cls="input input-bordered input-sm w-full"
+                                ),
+                                cls="form-control mb-3 hidden",
+                                id="modal-scheduled-date-container"
+                            ),
+                        ] if is_manager_or_owner else []
                     ),
 
                     # Кнопки действий
@@ -373,11 +412,10 @@ def create_payment_modal() -> Div:
 
                     method="POST",
                     action="/payment/create",
-                    enctype="multipart/form-data",
                     id="create-payment-form"
                 ),
 
-                cls="modal-box max-w-2xl"
+                cls="modal-box"
             ),
             # Backdrop для закрытия при клике вне модального окна
             Form(
@@ -532,9 +570,10 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                     if (modal) {
                         modal.showModal();
 
-                        // Инициализируем Flatpickr для дат в модальном окне если еще не инициализированы
+                        // Инициализируем Flatpickr для дат в модальном окне
                         const createdDateInput = document.getElementById('modal-created-date');
                         const paidDateInput = document.getElementById('modal-paid-date');
+                        const scheduledDateInput = document.getElementById('modal-scheduled-date');
 
                         if (createdDateInput && !createdDateInput._flatpickr) {
                             flatpickr(createdDateInput, {
@@ -555,8 +594,147 @@ def page_layout(title: str, content: Any, user_name: str, role: str, avatar_url:
                                 theme: 'light'
                             });
                         }
+
+                        if (scheduledDateInput && !scheduledDateInput._flatpickr) {
+                            flatpickr(scheduledDateInput, {
+                                locale: 'ru',
+                                dateFormat: 'Y-m-d',
+                                allowInput: true,
+                                clickOpens: true,
+                                theme: 'light'
+                            });
+                        }
                     }
                 }
+
+                // Переключение видимости полей дат в зависимости от статуса
+                function handleStatusChange(status) {
+                    const paidDateContainer = document.getElementById('modal-paid-date-container');
+                    const scheduledDateContainer = document.getElementById('modal-scheduled-date-container');
+
+                    if (paidDateContainer && scheduledDateContainer) {
+                        if (status === 'paid') {
+                            paidDateContainer.classList.remove('hidden');
+                            scheduledDateContainer.classList.add('hidden');
+                        } else if (status === 'scheduled') {
+                            paidDateContainer.classList.add('hidden');
+                            scheduledDateContainer.classList.remove('hidden');
+                        } else {
+                            paidDateContainer.classList.add('hidden');
+                            scheduledDateContainer.classList.add('hidden');
+                        }
+                    }
+                }
+
+                // Загрузка файла на сервер
+                async function uploadFile(file, statusElementId, fileIdInputId) {
+                    const statusElement = document.getElementById(statusElementId);
+                    const fileIdInput = document.getElementById(fileIdInputId);
+
+                    if (!file || !statusElement || !fileIdInput) return;
+
+                    try {
+                        statusElement.textContent = 'Загрузка...';
+                        statusElement.className = 'text-sm text-blue-500';
+
+                        const formData = new FormData();
+                        formData.append('file', file);
+
+                        const response = await fetch('/api/upload', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        const result = await response.json();
+
+                        if (result.success) {
+                            fileIdInput.value = result.file_id;
+                            statusElement.textContent = '✓ ' + result.filename;
+                            statusElement.className = 'text-sm text-green-600';
+                        } else {
+                            statusElement.textContent = '✗ Ошибка: ' + result.error;
+                            statusElement.className = 'text-sm text-red-600';
+                        }
+                    } catch (error) {
+                        statusElement.textContent = '✗ Ошибка загрузки';
+                        statusElement.className = 'text-sm text-red-600';
+                        console.error('Error uploading file:', error);
+                    }
+                }
+
+                // Обработка отправки формы создания платежа
+                document.addEventListener('DOMContentLoaded', function() {
+                    const createForm = document.getElementById('create-payment-form');
+                    if (createForm) {
+                        createForm.addEventListener('submit', async function(event) {
+                            event.preventDefault();
+
+                            const formData = new FormData(createForm);
+                            const submitBtn = createForm.querySelector('button[type="submit"]');
+
+                            // Дизейблим кнопку
+                            if (submitBtn) {
+                                submitBtn.disabled = true;
+                                submitBtn.textContent = 'Создание...';
+                            }
+
+                            try {
+                                const response = await fetch('/payment/create', {
+                                    method: 'POST',
+                                    body: formData
+                                });
+
+                                if (response.ok) {
+                                    // Закрываем модальное окно
+                                    const modal = document.getElementById('create-payment-modal');
+                                    if (modal) {
+                                        modal.close();
+                                    }
+
+                                    // Очищаем форму
+                                    createForm.reset();
+
+                                    // Обновляем таблицу
+                                    const currentParams = new URLSearchParams(window.location.search);
+                                    const url = '/dashboard?' + currentParams.toString();
+                                    await updateTable(url);
+                                } else {
+                                    alert('Ошибка при создании запроса');
+                                }
+                            } catch (error) {
+                                console.error('Ошибка:', error);
+                                alert('Ошибка при создании запроса');
+                            } finally {
+                                // Возвращаем кнопку в исходное состояние
+                                if (submitBtn) {
+                                    submitBtn.disabled = false;
+                                    submitBtn.textContent = 'Создать';
+                                }
+                            }
+                        });
+                    }
+
+                    // Обработчики загрузки файлов
+                    const invoiceFileInput = document.getElementById('modal-invoice-file');
+                    if (invoiceFileInput) {
+                        invoiceFileInput.addEventListener('change', function(event) {
+                            const file = event.target.files[0];
+                            if (file) {
+                                uploadFile(file, 'modal-invoice-status', 'modal-invoice-file-id');
+                            }
+                        });
+                    }
+
+                    const paymentFileInput = document.getElementById('modal-payment-file');
+                    if (paymentFileInput) {
+                        paymentFileInput.addEventListener('change', function(event) {
+                            const file = event.target.files[0];
+                            if (file) {
+                                uploadFile(file, 'modal-payment-status', 'modal-payment-file-id');
+                            }
+                        });
+                    }
+                });
 
                 // Функция переключения типа даты
                 function switchDateType(type) {
@@ -1351,7 +1529,7 @@ def per_page_selector(
 ) -> Select:
     """Выпадающий список для выбора количества записей на странице"""
 
-    options = [10, 25, 50, 100]
+    options = [10, 20, 25, 50, 100]
 
     return Select(
         *[

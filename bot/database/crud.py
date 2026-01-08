@@ -271,8 +271,14 @@ class PaymentRequestCRUD:
         amount: str,
         comment: str,
         invoice_file_id: Optional[str] = None,
+        payment_proof_file_id: Optional[str] = None,
+        status: PaymentRequestStatus = PaymentRequestStatus.PENDING,
+        created_at: Optional[datetime] = None,
+        paid_at: Optional[datetime] = None,
+        paid_by_id: Optional[int] = None,
+        scheduled_date: Optional[date] = None,
     ) -> PaymentRequest:
-        """Создает новый запрос на оплату
+        """Создает новый запрос на оплату с полной поддержкой всех полей
 
         Args:
             session: Сессия БД
@@ -281,17 +287,30 @@ class PaymentRequestCRUD:
             amount: Сумма в рублях
             comment: Комментарий
             invoice_file_id: Telegram file_id счета (опционально)
+            payment_proof_file_id: Telegram file_id платежки (опционально)
+            status: Статус запроса (по умолчанию PENDING)
+            created_at: Дата создания (по умолчанию текущее время)
+            paid_at: Дата оплаты (опционально)
+            paid_by_id: ID пользователя оплатившего (опционально)
+            scheduled_date: Дата планирования (опционально)
 
         Returns:
             Созданный запрос на оплату
         """
+        from datetime import datetime as dt
+
         payment_request = PaymentRequest(
             created_by_id=created_by_id,
             title=title,
             amount=amount,
             comment=comment,
             invoice_file_id=invoice_file_id,
-            status=PaymentRequestStatus.PENDING.value,
+            payment_proof_file_id=payment_proof_file_id,
+            status=status.value if isinstance(status, PaymentRequestStatus) else status,
+            created_at=created_at if created_at else dt.utcnow(),
+            paid_at=paid_at,
+            paid_by_id=paid_by_id,
+            scheduled_date=scheduled_date,
         )
         session.add(payment_request)
         await session.commit()
