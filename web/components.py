@@ -302,51 +302,9 @@ def create_payment_modal(user_role: str = "worker") -> Div:
                         cls="form-control mb-3"
                     ),
 
-                    # Файл счета (для всех ролей)
-                    Div(
-                        Label("Счет (необязательно)", cls="label"),
-                        Input(
-                            type="file",
-                            id="modal-invoice-file",
-                            accept=".pdf,.jpg,.jpeg,.png",
-                            cls="file-input file-input-bordered file-input-sm w-full"
-                        ),
-                        Input(type="hidden", name="invoice_file_id", id="modal-invoice-file-id", value=""),
-                        Span("", id="modal-invoice-status", cls="text-sm text-gray-500"),
-                        cls="form-control mb-3"
-                    ) if True else None,  # Всегда показываем для всех
-
                     # Дополнительные поля для Manager/Owner
                     *(
                         [
-                            # Файл платежки
-                            Div(
-                                Label("Платежка (необязательно)", cls="label"),
-                                Input(
-                                    type="file",
-                                    id="modal-payment-file",
-                                    accept=".pdf,.jpg,.jpeg,.png",
-                                    cls="file-input file-input-bordered file-input-sm w-full"
-                                ),
-                                Input(type="hidden", name="payment_file_id", id="modal-payment-file-id", value=""),
-                                Span("", id="modal-payment-status", cls="text-sm text-gray-500"),
-                                cls="form-control mb-3"
-                            ),
-
-                            # Дата создания
-                            Div(
-                                Label("Дата создания", cls="label"),
-                                Input(
-                                    type="text",
-                                    name="created_date",
-                                    id="modal-created-date",
-                                    value=today,
-                                    placeholder="YYYY-MM-DD",
-                                    cls="input input-bordered input-sm w-full"
-                                ),
-                                cls="form-control mb-3"
-                            ),
-
                             # Статус
                             Div(
                                 Label("Статус", cls="label"),
@@ -362,6 +320,21 @@ def create_payment_modal(user_role: str = "worker") -> Div:
                                 cls="form-control mb-3"
                             ),
 
+                            # Дата создания
+                            Div(
+                                Label("Дата создания", cls="label"),
+                                Input(
+                                    type="text",
+                                    name="created_date",
+                                    id="modal-created-date",
+                                    value=today,
+                                    placeholder="Выберите дату",
+                                    cls="input input-bordered input-sm w-full",
+                                    readonly=True
+                                ),
+                                cls="form-control mb-3"
+                            ),
+
                             # Дата оплаты (показывается если статус = paid)
                             Div(
                                 Label("Дата оплаты", cls="label"),
@@ -370,8 +343,9 @@ def create_payment_modal(user_role: str = "worker") -> Div:
                                     name="paid_date",
                                     id="modal-paid-date",
                                     value=today,
-                                    placeholder="YYYY-MM-DD",
-                                    cls="input input-bordered input-sm w-full"
+                                    placeholder="Выберите дату",
+                                    cls="input input-bordered input-sm w-full",
+                                    readonly=True
                                 ),
                                 cls="form-control mb-3 hidden",
                                 id="modal-paid-date-container"
@@ -385,11 +359,44 @@ def create_payment_modal(user_role: str = "worker") -> Div:
                                     name="scheduled_date",
                                     id="modal-scheduled-date",
                                     value=today,
-                                    placeholder="YYYY-MM-DD",
-                                    cls="input input-bordered input-sm w-full"
+                                    placeholder="Выберите дату",
+                                    cls="input input-bordered input-sm w-full",
+                                    readonly=True
                                 ),
                                 cls="form-control mb-3 hidden",
                                 id="modal-scheduled-date-container"
+                            ),
+                        ] if is_manager_or_owner else []
+                    ),
+
+                    # Файл счета (для всех ролей)
+                    Div(
+                        Label("Счет (необязательно)", cls="label"),
+                        Input(
+                            type="file",
+                            id="modal-invoice-file",
+                            accept=".pdf,.jpg,.jpeg,.png",
+                            cls="file-input file-input-bordered file-input-sm w-full"
+                        ),
+                        Input(type="hidden", name="invoice_file_id", id="modal-invoice-file-id", value=""),
+                        Span("", id="modal-invoice-status", cls="text-sm text-gray-500"),
+                        cls="form-control mb-3"
+                    ),
+
+                    # Файл платежки (для Manager/Owner)
+                    *(
+                        [
+                            Div(
+                                Label("Платежка (необязательно)", cls="label"),
+                                Input(
+                                    type="file",
+                                    id="modal-payment-file",
+                                    accept=".pdf,.jpg,.jpeg,.png",
+                                    cls="file-input file-input-bordered file-input-sm w-full"
+                                ),
+                                Input(type="hidden", name="payment_file_id", id="modal-payment-file-id", value=""),
+                                Span("", id="modal-payment-status", cls="text-sm text-gray-500"),
+                                cls="form-control mb-3"
                             ),
                         ] if is_manager_or_owner else []
                     ),
