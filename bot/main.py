@@ -52,10 +52,12 @@ async def main():
     dp.callback_query.middleware(AuthMiddleware())
 
     # Регистрация роутеров
+    dp.include_router(testing_router)  # Testing first for debugging
     dp.include_router(commands_router)
     dp.include_router(pending_list_router)
-    dp.include_router(testing_router)
     dp.include_router(payment_callbacks_router)
+
+    logger.info(f"testing_router handlers: {testing_router.message.handlers}")
 
     # Регистрация диалогов
     dp.include_router(main_menu_dialog)
