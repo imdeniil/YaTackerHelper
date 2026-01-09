@@ -176,9 +176,9 @@ def user_table(users: List[User]) -> Div:
                         Th("ID", style="width: 5%"),
                         Th("ФИО", style="width: 25%"),
                         Th("Username", style="width: 20%"),
-                        Th("Роль", style="width: 15%"),
-                        Th("Плательщик", style="width: 15%", cls="text-center"),
-                        Th("Создан", style="width: 20%")
+                        Th("Роль", style="width: 17%"),
+                        Th("Плательщик", style="width: 16%", cls="text-center"),
+                        Th("Создан", style="width: 17%")
                     )
                 ),
                 Tbody(
