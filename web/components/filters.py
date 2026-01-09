@@ -205,7 +205,7 @@ def advanced_filters(
                     Button(
                         "Дата создания",
                         type="button",
-                        cls=f"btn btn-sm flex-1 {'btn-primary' if date_type == 'created' else 'btn-ghost'} date-type-tab items-center justify-center",
+                        cls=f"btn btn-sm flex-1 {'btn-primary' if date_type == 'created' else 'btn-outline'} date-type-tab items-center justify-center rounded-lg",
                         data_date_type="created",
                         id="tab-created",
                         onclick="switchDateType('created')"
@@ -213,12 +213,12 @@ def advanced_filters(
                     Button(
                         "Дата оплаты",
                         type="button",
-                        cls=f"btn btn-sm flex-1 {'btn-primary' if date_type == 'paid' else 'btn-ghost'} date-type-tab items-center justify-center",
+                        cls=f"btn btn-sm flex-1 {'btn-primary' if date_type == 'paid' else 'btn-outline'} date-type-tab items-center justify-center rounded-lg",
                         data_date_type="paid",
                         id="tab-paid",
                         onclick="switchDateType('paid')"
                     ),
-                    cls="flex w-full mb-2"
+                    cls="flex gap-2 w-full mb-2"
                 ),
                 # Поля дат в одну строку (выровнены с "Сумма до")
                 Div(
