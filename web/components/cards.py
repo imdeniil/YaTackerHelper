@@ -45,6 +45,26 @@ def card(title: str, *content) -> Div:
     )
 
 
+def format_amount_display(amount: str) -> str:
+    """Форматирует сумму с разделителями разрядов"""
+    import re
+    clean_amount = re.sub(r'[^\d.,]', '', str(amount))
+    clean_amount = clean_amount.replace(',', '.')
+    parts = clean_amount.split('.')
+    integer_part = parts[0] if parts else ''
+    decimal_part = parts[1] if len(parts) > 1 else None
+
+    formatted_integer = ''
+    for i, digit in enumerate(reversed(integer_part)):
+        if i > 0 and i % 3 == 0:
+            formatted_integer = ' ' + formatted_integer
+        formatted_integer = digit + formatted_integer
+
+    if decimal_part is not None:
+        return f"{formatted_integer}.{decimal_part}"
+    return formatted_integer
+
+
 def payment_request_detail(payment_request: PaymentRequest, can_edit: bool = False) -> Div:
     """Детальная информация о запросе на оплату"""
     # Формируем информацию о датах
@@ -57,16 +77,24 @@ def payment_request_detail(payment_request: PaymentRequest, can_edit: bool = Fal
         A(
             "📥 Скачать счёт",
             href=f"/payment/{payment_request.id}/download/invoice",
-            cls="btn btn-sm btn-outline"
-        ) if payment_request.invoice_file_id else Span("Счёт не загружен", cls="text-gray-500")
+            cls="btn btn-sm btn-outline w-full"
+        ) if payment_request.invoice_file_id else Div(
+            Span("📄 Счёт", cls="font-medium"),
+            Span("Не загружен", cls="text-gray-400 text-sm"),
+            cls="flex flex-col items-center p-3 border border-dashed border-gray-300 rounded-lg"
+        )
     )
 
     payment_proof_btn = (
         A(
             "📥 Скачать платёжку",
             href=f"/payment/{payment_request.id}/download/proof",
-            cls="btn btn-sm btn-outline"
-        ) if payment_request.payment_proof_file_id else Span("Платёжка не загружена", cls="text-gray-500")
+            cls="btn btn-sm btn-outline w-full"
+        ) if payment_request.payment_proof_file_id else Div(
+            Span("📄 Платёжка", cls="font-medium"),
+            Span("Не загружена", cls="text-gray-400 text-sm"),
+            cls="flex flex-col items-center p-3 border border-dashed border-gray-300 rounded-lg"
+        )
     )
 
     # Кнопка назад
@@ -80,78 +108,89 @@ def payment_request_detail(payment_request: PaymentRequest, can_edit: bool = Fal
             cls="flex items-center gap-4 mb-6"
         ),
 
-        # Основная информация
+        # Двухколоночная структура
         Div(
-            # Название и сумма
+            # Левая колонка - основная информация
             Div(
                 Div(
-                    Span("Название:", cls="font-semibold"),
-                    Span(payment_request.title, cls="ml-2"),
-                    cls="mb-2"
+                    # Название
+                    Div(
+                        Span("Название", cls="text-gray-500 text-sm"),
+                        P(payment_request.title, cls="font-medium"),
+                        cls="mb-4"
+                    ),
+                    # Сумма
+                    Div(
+                        Span("Сумма", cls="text-gray-500 text-sm"),
+                        P(f"{format_amount_display(payment_request.amount)} ₽", cls="text-2xl font-bold text-primary"),
+                        cls="mb-4"
+                    ),
+                    # Статус
+                    Div(
+                        Span("Статус", cls="text-gray-500 text-sm"),
+                        Div(status_badge(payment_request.status), cls="mt-1"),
+                        cls="mb-4"
+                    ),
+                    # Даты
+                    Div(
+                        Span("Создано", cls="text-gray-500 text-sm"),
+                        P(created_date, cls="font-medium"),
+                        cls="mb-4"
+                    ),
+                    Div(
+                        Span("Создатель", cls="text-gray-500 text-sm"),
+                        P(payment_request.created_by.display_name if payment_request.created_by else "-", cls="font-medium"),
+                        cls="mb-4"
+                    ),
+                    Div(
+                        Span("Оплачено", cls="text-gray-500 text-sm"),
+                        P(paid_date, cls="font-medium"),
+                        cls="mb-4"
+                    ) if payment_request.paid_at else None,
+                    Div(
+                        Span("Оплатил", cls="text-gray-500 text-sm"),
+                        P(payment_request.paid_by.display_name if payment_request.paid_by else "-", cls="font-medium"),
+                        cls="mb-4"
+                    ) if payment_request.paid_by else None,
+                    Div(
+                        Span("Запланировано", cls="text-gray-500 text-sm"),
+                        P(scheduled_date, cls="font-medium"),
+                        cls="mb-4"
+                    ) if payment_request.scheduled_date else None,
+                    cls="card-body"
                 ),
-                Div(
-                    Span("Сумма:", cls="font-semibold"),
-                    Span(f"{payment_request.amount} ₽", cls="ml-2 text-lg font-bold"),
-                    cls="mb-2"
-                ),
-                Div(
-                    Span("Статус:", cls="font-semibold"),
-                    status_badge(payment_request.status),
-                    cls="mb-2 flex items-center gap-2"
-                ),
-                cls="mb-4"
+                cls="card bg-base-100 shadow-xl"
             ),
 
-            # Комментарий
+            # Правая колонка - комментарий и файлы
             Div(
-                Span("Комментарий:", cls="font-semibold"),
-                P(payment_request.comment or "Нет комментария", cls="mt-1 p-3 bg-base-200 rounded-lg"),
-                cls="mb-4"
+                Div(
+                    # Комментарий
+                    Div(
+                        Span("Комментарий", cls="text-gray-500 text-sm"),
+                        P(
+                            payment_request.comment or "Нет комментария",
+                            cls="mt-2 p-4 bg-base-200 rounded-lg whitespace-pre-wrap"
+                        ),
+                        cls="mb-6"
+                    ),
+                    # Файлы
+                    Div(
+                        Span("Документы", cls="text-gray-500 text-sm"),
+                        Div(
+                            invoice_btn,
+                            payment_proof_btn,
+                            cls="mt-2 flex flex-col gap-3"
+                        ),
+                        cls=""
+                    ),
+                    cls="card-body"
+                ),
+                cls="card bg-base-100 shadow-xl"
             ),
 
-            # Даты
-            Div(
-                Div(
-                    Span("Создано:", cls="font-semibold"),
-                    Span(created_date, cls="ml-2"),
-                    cls="mb-2"
-                ),
-                Div(
-                    Span("Создатель:", cls="font-semibold"),
-                    Span(payment_request.created_by.display_name if payment_request.created_by else "-", cls="ml-2"),
-                    cls="mb-2"
-                ),
-                Div(
-                    Span("Оплачено:", cls="font-semibold"),
-                    Span(paid_date, cls="ml-2"),
-                    cls="mb-2"
-                ) if payment_request.paid_at else None,
-                Div(
-                    Span("Оплатил:", cls="font-semibold"),
-                    Span(payment_request.paid_by.display_name if payment_request.paid_by else "-", cls="ml-2"),
-                    cls="mb-2"
-                ) if payment_request.paid_by else None,
-                Div(
-                    Span("Запланировано:", cls="font-semibold"),
-                    Span(scheduled_date, cls="ml-2"),
-                    cls="mb-2"
-                ) if payment_request.scheduled_date else None,
-                cls="mb-4"
-            ),
-
-            # Файлы
-            Div(
-                H3("Файлы", cls="font-semibold mb-2"),
-                Div(
-                    invoice_btn,
-                    payment_proof_btn,
-                    cls="flex gap-4"
-                ),
-                cls="mb-4"
-            ),
-
-            cls="card-body"
+            cls="grid grid-cols-1 md:grid-cols-2 gap-6"
         ),
 
-        cls="card bg-base-100 shadow-xl"
+        cls=""
     )
