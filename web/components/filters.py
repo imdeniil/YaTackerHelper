@@ -55,11 +55,11 @@ def advanced_filters(
                 cls="input input-sm input-bordered flex-1",
                 id="search-input"
             ),
-            Button("↵", type="submit", cls="btn btn-outline btn-sm", title="Применить", id="apply-filters-btn"),
+            Button("↵", type="submit", cls="btn btn-ghost btn-sm", title="Применить", id="apply-filters-btn"),
             A("⟲", href=f"/dashboard?per_page={per_page}", cls="btn btn-ghost btn-sm", title="Сбросить", id="reset-filters-btn"),
             Button("📊", type="button", cls="btn btn-ghost btn-sm", title="Аналитика", id="analytics-btn", onclick="openAnalyticsModal()"),
             Button("📥", type="button", cls="btn btn-ghost btn-sm", title="Экспорт в Excel", id="export-btn", onclick="exportToExcel()"),
-            Button("+", type="button", cls="btn btn-outline btn-sm", title="Создать запрос", id="create-request-btn", onclick="openCreateModal()"),
+            Button("+", type="button", cls="btn btn-ghost btn-sm", title="Создать запрос", id="create-request-btn", onclick="openCreateModal()"),
             cls="flex gap-2 mb-4"
         ),
 
@@ -220,8 +220,10 @@ def advanced_filters(
                         id="tab-paid",
                         onclick="switchDateType('paid')"
                     ),
-                    cls="flex w-full mb-3"
+                    cls="flex w-full mb-2"
                 ),
+                # Отступ для выравнивания с "Сумма до"
+                Div(cls="mb-2"),
                 # Поля дат в одну строку
                 Div(
                     Input(

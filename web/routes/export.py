@@ -101,8 +101,11 @@ def setup_export_routes(app, config: WebConfig):
                 bottom=Side(style='thin')
             )
 
+            # Базовый URL для ссылок на файлы
+            base_url = str(request.base_url).rstrip('/')
+
             # Заголовки
-            headers = ["ID", "Название", "Сумма", "Статус", "Создатель", "Дата создания", "Обработал", "Дата оплаты", "Комментарий"]
+            headers = ["ID", "Название", "Сумма", "Статус", "Создатель", "Дата создания", "Обработал", "Дата оплаты", "Комментарий", "Счёт", "Платёжка"]
             for col, header in enumerate(headers, 1):
                 cell = ws.cell(row=1, column=col, value=header)
                 cell.font = header_font
@@ -119,17 +122,36 @@ def setup_export_routes(app, config: WebConfig):
                 PaymentRequestStatus.CANCELLED.value: "Отменено",
             }
 
+            # Стиль для ссылок
+            link_font = Font(color="0563C1", underline="single")
+
             # Данные
             for row_idx, req in enumerate(requests_list, 2):
                 ws.cell(row=row_idx, column=1, value=req.id).border = thin_border
                 ws.cell(row=row_idx, column=2, value=req.title).border = thin_border
-                ws.cell(row=row_idx, column=3, value=req.amount).border = thin_border
+                ws.cell(row=row_idx, column=3, value=req.amount.replace(" ", "")).border = thin_border
                 ws.cell(row=row_idx, column=4, value=status_names.get(req.status, req.status)).border = thin_border
                 ws.cell(row=row_idx, column=5, value=req.created_by.display_name if req.created_by else "").border = thin_border
                 ws.cell(row=row_idx, column=6, value=req.created_at.strftime("%d.%m.%Y %H:%M") if req.created_at else "").border = thin_border
                 ws.cell(row=row_idx, column=7, value=req.paid_by.display_name if req.paid_by else "").border = thin_border
                 ws.cell(row=row_idx, column=8, value=req.paid_at.strftime("%d.%m.%Y %H:%M") if req.paid_at else "").border = thin_border
                 ws.cell(row=row_idx, column=9, value=req.comment or "").border = thin_border
+
+                # Ссылка на счёт
+                cell_invoice = ws.cell(row=row_idx, column=10)
+                cell_invoice.border = thin_border
+                if req.invoice_file_id:
+                    cell_invoice.value = "Скачать"
+                    cell_invoice.hyperlink = f"{base_url}/payment/{req.id}/download/invoice"
+                    cell_invoice.font = link_font
+
+                # Ссылка на платёжку
+                cell_proof = ws.cell(row=row_idx, column=11)
+                cell_proof.border = thin_border
+                if req.payment_proof_file_id and req.payment_proof_file_id != "web_payment":
+                    cell_proof.value = "Скачать"
+                    cell_proof.hyperlink = f"{base_url}/payment/{req.id}/download/proof"
+                    cell_proof.font = link_font
 
             # Автоширина колонок
             for col in range(1, len(headers) + 1):
