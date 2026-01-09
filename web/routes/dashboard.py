@@ -169,7 +169,7 @@ async def _worker_dashboard(
                 ),
                 cls="card-body"
             ),
-            cls="card bg-base-100 shadow-xl my-4"
+            cls="card bg-base-100 shadow-xl mb-4"
         ),
 
         # Таблица с пагинацией
@@ -178,7 +178,7 @@ async def _worker_dashboard(
                 payment_request_table(requests, show_creator=False, pagination_data=pagination_data),
                 cls="card-body p-3"
             ),
-            cls="card bg-base-100 shadow-xl my-4"
+            cls="card bg-base-100 shadow-xl mb-4"
         ),
 
         # Модальное окно создания
@@ -283,7 +283,7 @@ async def _owner_dashboard(
                 ),
                 cls="card-body"
             ),
-            cls="card bg-base-100 shadow-xl my-4"
+            cls="card bg-base-100 shadow-xl mb-4"
         ),
 
         # Таблица с пагинацией
@@ -292,7 +292,7 @@ async def _owner_dashboard(
                 payment_request_table(requests, show_creator=True, pagination_data=pagination_data),
                 cls="card-body p-3"
             ),
-            cls="card bg-base-100 shadow-xl my-4"
+            cls="card bg-base-100 shadow-xl mb-4"
         ),
 
         # Модальное окно создания
