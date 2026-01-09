@@ -50,7 +50,7 @@ def navbar(display_name: str, role: str, avatar_url: str) -> Div:
             ),
             cls="navbar bg-base-100 shadow-lg"
         ),
-        cls="mb-1"
+        cls="mb-0"
     )
 
 
