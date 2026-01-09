@@ -811,7 +811,9 @@ class PaymentRequestCRUD:
         query = query.order_by(status_priority, PaymentRequest.created_at.desc())
 
         # Пагинация
-        query = query.offset(skip).limit(limit)
+        query = query.offset(skip)
+        if limit > 0:
+            query = query.limit(limit)
 
         result = await session.execute(query)
         return list(result.scalars().all())
