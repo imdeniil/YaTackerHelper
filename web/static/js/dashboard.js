@@ -258,11 +258,11 @@ function switchDateType(type) {
     const allTabs = document.querySelectorAll('.date-type-tab');
     allTabs.forEach(tab => {
         if (tab.getAttribute('data-date-type') === type) {
-            tab.classList.remove('btn-ghost');
+            tab.classList.remove('btn-outline');
             tab.classList.add('btn-primary');
         } else {
             tab.classList.remove('btn-primary');
-            tab.classList.add('btn-ghost');
+            tab.classList.add('btn-outline');
         }
     });
 }
