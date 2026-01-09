@@ -411,10 +411,10 @@ def user_edit_form(user: User) -> Form:
         Div(
             Label(
                 Input(
-                    type_="checkbox",
+                    type="checkbox",
                     name="is_billing_contact",
                     value="true",
-                    checked=user.is_billing_contact,
+                    checked="1" if user.is_billing_contact else None,
                     cls="checkbox checkbox-primary"
                 ),
                 Span("Плательщик", cls="label-text ml-3"),
@@ -494,7 +494,7 @@ def user_create_form() -> Form:
         Div(
             Label(
                 Input(
-                    type_="checkbox",
+                    type="checkbox",
                     name="is_billing_contact",
                     value="true",
                     cls="checkbox checkbox-primary"
