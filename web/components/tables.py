@@ -173,12 +173,12 @@ def user_table(users: List[User]) -> Div:
             Table(
                 Thead(
                     Tr(
-                        Th("ID", cls="w-1/12"),
-                        Th("ФИО", cls="w-3/12"),
-                        Th("Username", cls="w-2/12"),
-                        Th("Роль", cls="w-2/12"),
-                        Th("Плательщик", cls="w-2/12 text-center"),
-                        Th("Создан", cls="w-2/12")
+                        Th("ID", style="width: 5%"),
+                        Th("ФИО", style="width: 25%"),
+                        Th("Username", style="width: 20%"),
+                        Th("Роль", style="width: 15%"),
+                        Th("Плательщик", style="width: 15%", cls="text-center"),
+                        Th("Создан", style="width: 20%")
                     )
                 ),
                 Tbody(
