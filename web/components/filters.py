@@ -52,7 +52,7 @@ def advanced_filters(
                 name="search",
                 value=search_query,
                 placeholder="🔍 Поиск по названию...",
-                cls="input input-sm input-bordered flex-1",
+                cls="input input-sm input-bordered rounded-lg flex-1",
                 id="search-input"
             ),
             Button("↵", type="submit", cls="btn btn-ghost btn-sm", title="Применить", id="apply-filters-btn"),
@@ -76,7 +76,7 @@ def advanced_filters(
                                 id="status-summary-text"
                             ),
                             Span("▼", cls="ml-auto", id="status-arrow", style="font-size: 0.75rem;"),
-                            cls="input input-sm input-bordered w-full flex items-center justify-between cursor-pointer"
+                            cls="input input-sm input-bordered rounded-lg w-full flex items-center justify-between cursor-pointer bg-base-100"
                         ),
                         Ul(
                             Li(
@@ -152,7 +152,7 @@ def advanced_filters(
                                 id="creator-summary-text"
                             ),
                             Span("▼", cls="ml-auto", id="creator-arrow", style="font-size: 0.75rem;"),
-                            cls="input input-sm input-bordered w-full flex items-center justify-between cursor-pointer",
+                            cls="input input-sm input-bordered rounded-lg w-full flex items-center justify-between cursor-pointer bg-base-100",
                             onclick="toggleCreatorArrow()"
                         ),
                         Ul(
@@ -200,7 +200,7 @@ def advanced_filters(
 
             # Центральная колонка - Период (два календаря с табами)
             Div(
-                # Табы для выбора типа даты
+                # Табы для выбора типа даты (выровнены с "Сумма от")
                 Div(
                     Button(
                         "Дата создания",
@@ -218,11 +218,9 @@ def advanced_filters(
                         id="tab-paid",
                         onclick="switchDateType('paid')"
                     ),
-                    cls="flex w-full mb-2"
+                    cls="flex w-full h-8 mb-2"
                 ),
-                # Отступ для выравнивания с "Сумма до"
-                Div(cls="mb-2"),
-                # Поля дат в одну строку
+                # Поля дат в одну строку (выровнены с "Сумма до")
                 Div(
                     Input(
                         type="text",
@@ -230,7 +228,7 @@ def advanced_filters(
                         id="date_from_picker",
                         value=date_from,
                         placeholder="📅 От",
-                        cls="input input-sm input-bordered flex-1"
+                        cls="input input-sm input-bordered rounded-lg flex-1"
                     ),
                     Input(
                         type="text",
@@ -238,7 +236,7 @@ def advanced_filters(
                         id="date_to_picker",
                         value=date_to,
                         placeholder="📅 До",
-                        cls="input input-sm input-bordered flex-1"
+                        cls="input input-sm input-bordered rounded-lg flex-1"
                     ),
                     cls="flex gap-2"
                 ),
@@ -254,7 +252,7 @@ def advanced_filters(
                     name="amount_min",
                     value=amount_min,
                     placeholder="💰 Сумма от",
-                    cls="input input-sm input-bordered w-full mb-2",
+                    cls="input input-sm input-bordered rounded-lg w-full h-8 mb-2",
                     id="amount-min"
                 ),
                 Input(
@@ -262,7 +260,7 @@ def advanced_filters(
                     name="amount_max",
                     value=amount_max,
                     placeholder="💰 Сумма до",
-                    cls="input input-sm input-bordered w-full",
+                    cls="input input-sm input-bordered rounded-lg w-full",
                     id="amount-max"
                 ),
                 cls="form-control"
