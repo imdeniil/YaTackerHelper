@@ -4,15 +4,13 @@ from aiogram.types import CallbackQuery
 from aiogram_dialog import DialogManager
 from aiogram_dialog.widgets.kbd import Button
 
-from bot.states import (
-    CloneProject,
-    ProjectInfo,
-    UserManagement,
-    UserSettings,
-    PaymentRequestCreation,
-    MyPaymentRequests,
-    AllPaymentRequests,
-)
+from bot.dialogs.clone_project.states import CloneProject, ProjectInfo
+from bot.dialogs.user_management.states import UserManagement
+from bot.dialogs.user_settings.states import UserSettings
+from bot.dialogs.payment_request.states import PaymentRequestCreation
+from bot.dialogs.my_payment_requests.states import MyPaymentRequests
+from bot.dialogs.all_payment_requests.states import AllPaymentRequests
+from bot.dialogs.payments_menu.states import PaymentsMenu
 
 
 async def on_clone_project(
@@ -76,3 +74,10 @@ async def on_all_payment_requests(
 ):
     """Обработчик нажатия на кнопку "Все запросы на оплату"."""
     await manager.start(AllPaymentRequests.list)
+
+
+async def on_payments_menu(
+    callback: CallbackQuery, button: Button, manager: DialogManager
+):
+    """Обработчик нажатия на кнопку "Платежи" (подменю)."""
+    await manager.start(PaymentsMenu.main)

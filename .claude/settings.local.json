@@ -52,7 +52,17 @@
       "Bash(powershell -Command \"(Get-Content ''C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\web\\routes\\dashboard.py'' | Measure-Object -Line).Lines\")",
       "Bash(del \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\main.py\")",
       "Bash(Remove-Item \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\main.py\")",
-      "Bash(powershell -Command \"Get-ChildItem web\\routes\\*.py | ForEach-Object { Write-Host $_Name '':'' (Get-Content $_FullName).Count ''lines'' }\")"
+      "Bash(powershell -Command \"Get-ChildItem web\\routes\\*.py | ForEach-Object { Write-Host $_Name '':'' (Get-Content $_FullName).Count ''lines'' }\")",
+      "Bash(uv run alembic revision:*)",
+      "Bash(powershell -Command \"Get-ChildItem -Path bot -Recurse -File | Select-Object FullName | ForEach-Object { $_FullName.Replace((Get-Location).Path + ''\\'', '''') }\")",
+      "Bash(del \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\handlers\\commands.py\")",
+      "Bash(del \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\handlers\\payment_callbacks.py\")",
+      "Bash(del \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\handlers\\pending_list_callbacks.py\")",
+      "Bash(del \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\handlers\\testing.py\")",
+      "Bash(Remove-Item \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\handlers\\commands.py\")",
+      "Bash(Remove-Item \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\handlers\\payment_callbacks.py\")",
+      "Bash(Remove-Item \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\handlers\\pending_list_callbacks.py\")",
+      "Bash(Remove-Item \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\handlers\\testing.py\")"
     ],
     "deny": [],
     "ask": []

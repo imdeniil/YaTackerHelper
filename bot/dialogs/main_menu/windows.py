@@ -4,7 +4,7 @@ from aiogram_dialog import Window
 from aiogram_dialog.widgets.kbd import Button, Column
 from aiogram_dialog.widgets.text import Const, Format
 
-from bot.states import MainMenu
+from .states import MainMenu
 from .getters import get_main_menu_data
 from .handlers import (
     on_clone_project,
@@ -14,6 +14,7 @@ from .handlers import (
     on_payment_request,
     on_my_payment_requests,
     on_all_payment_requests,
+    on_payments_menu,
 )
 
 
@@ -46,9 +47,9 @@ main_menu_window = Window(
             when=lambda data, widget, manager: not data.get("is_billing_contact", False),
         ),
         Button(
-            Const("📊 Все запросы на оплату"),
-            id="all_payment_requests",
-            on_click=on_all_payment_requests,
+            Const("💳 Платежи"),
+            id="payments_menu",
+            on_click=on_payments_menu,
             when=lambda data, widget, manager: data.get("is_billing_contact", False),
         ),
         Button(

@@ -6,9 +6,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram_dialog import DialogManager, ShowMode
 from aiogram_dialog.widgets.kbd import Button, Select
 
-from bot.states import AllPaymentRequests
+from .states import AllPaymentRequests
 from bot.database import get_session, PaymentRequestCRUD, PaymentRequestStatus
-from bot.handlers.payment_callbacks import UploadProof, CancelWithComment
+from bot.handlers.payments.callbacks import UploadProof, CancelWithComment
 from .getters import get_all_request_details_data
 
 logger = logging.getLogger(__name__)
@@ -342,7 +342,7 @@ async def on_schedule_today(callback: CallbackQuery, button: Button, manager: Di
 
     async with get_session() as session:
         from bot.database import BillingNotificationCRUD
-        from bot.handlers.payment_callbacks import format_payment_request_message, get_payment_request_keyboard
+        from bot.handlers.payments.callbacks import format_payment_request_message, get_payment_request_keyboard
 
         # Планируем на сегодня и устанавливаем processing_by
         payment_request = await PaymentRequestCRUD.schedule_payment(
@@ -387,7 +387,7 @@ async def on_schedule_today(callback: CallbackQuery, button: Button, manager: Di
 
 async def on_select_custom_date(callback: CallbackQuery, button: Button, manager: DialogManager):
     """Обработчик выбора произвольной даты"""
-    from bot.handlers.payment_callbacks import SelectDate
+    from bot.handlers.payments.callbacks import SelectDate
 
     request_id = manager.dialog_data.get("selected_request_id")
 

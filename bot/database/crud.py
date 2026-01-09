@@ -127,16 +127,19 @@ class UserCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def get_all_users(session: AsyncSession) -> List[User]:
+    async def get_all_users(session: AsyncSession, include_inactive: bool = False) -> List[User]:
         """Получает всех пользователей с загруженными настройками
 
         Args:
             session: Сессия БД
+            include_inactive: Включать неактивных пользователей (по умолчанию False)
 
         Returns:
             Список всех пользователей
         """
         query = select(User).options(selectinload(User.settings))
+        if not include_inactive:
+            query = query.where(User.is_active == True)
         result = await session.execute(query)
         return list(result.scalars().all())
 
@@ -243,21 +246,62 @@ class UserCRUD:
 
     @staticmethod
     async def get_billing_contacts(session: AsyncSession) -> List[User]:
-        """Получает всех пользователей отмеченных как billing контакты
+        """Получает всех активных пользователей отмеченных как billing контакты
 
         Args:
             session: Сессия БД
 
         Returns:
-            Список пользователей с is_billing_contact=True
+            Список активных пользователей с is_billing_contact=True
         """
         query = (
             select(User)
             .options(selectinload(User.settings))
             .where(User.is_billing_contact == True)
+            .where(User.is_active == True)
         )
         result = await session.execute(query)
         return list(result.scalars().all())
+
+    @staticmethod
+    async def deactivate_user(session: AsyncSession, user_id: int) -> Optional[User]:
+        """Деактивирует пользователя (soft delete)
+
+        Args:
+            session: Сессия БД
+            user_id: ID пользователя
+
+        Returns:
+            Деактивированный пользователь или None
+        """
+        user = await UserCRUD.get_user_by_id(session, user_id)
+        if not user:
+            return None
+
+        user.is_active = False
+        await session.commit()
+        await session.refresh(user)
+        return user
+
+    @staticmethod
+    async def activate_user(session: AsyncSession, user_id: int) -> Optional[User]:
+        """Активирует пользователя
+
+        Args:
+            session: Сессия БД
+            user_id: ID пользователя
+
+        Returns:
+            Активированный пользователь или None
+        """
+        user = await UserCRUD.get_user_by_id(session, user_id)
+        if not user:
+            return None
+
+        user.is_active = True
+        await session.commit()
+        await session.refresh(user)
+        return user
 
 
 class PaymentRequestCRUD:

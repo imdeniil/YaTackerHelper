@@ -425,9 +425,18 @@ def user_edit_form(user: User) -> Form:
 
         # Кнопки
         Div(
-            Button("Сохранить", type_="submit", cls="btn btn-primary"),
-            A("Отмена", href="/users", cls="btn btn-ghost"),
-            cls="flex gap-2"
+            Div(
+                Button("Сохранить", type_="submit", cls="btn btn-primary"),
+                A("Отмена", href="/users", cls="btn btn-ghost"),
+                cls="flex gap-2"
+            ),
+            A(
+                "🗑️ Удалить",
+                href=f"/users/{user.id}/delete",
+                cls="btn btn-error btn-outline",
+                onclick="return confirm('Вы уверены что хотите удалить этого пользователя?')"
+            ),
+            cls="flex justify-between items-center"
         ),
 
         method="POST",

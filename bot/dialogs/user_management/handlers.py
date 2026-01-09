@@ -53,16 +53,16 @@ async def on_switch_to_delete(callback: CallbackQuery, button: Button, manager: 
 # ============ Удаление пользователя ============
 
 async def on_delete_user_confirm(callback: CallbackQuery, button: Button, manager: DialogManager):
-    """Подтверждение удаления пользователя"""
+    """Подтверждение удаления (деактивации) пользователя"""
     user_id = manager.dialog_data.get("selected_user_id")
     if not user_id:
         await callback.answer("❌ Пользователь не выбран", show_alert=True)
         return
 
     async with get_session() as session:
-        deleted = await UserCRUD.delete_user(session, int(user_id))
+        deactivated = await UserCRUD.deactivate_user(session, int(user_id))
 
-    if deleted:
+    if deactivated:
         await callback.answer("✅ Пользователь удален")
         await on_switch_to_list(callback, button, manager)
     else:

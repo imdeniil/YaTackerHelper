@@ -5,9 +5,9 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardBut
 from aiogram_dialog import DialogManager, ShowMode
 from aiogram_dialog.widgets.kbd import Button, Select
 
-from bot.states import MyPaymentRequests
+from .states import MyPaymentRequests
 from bot.database import get_session, PaymentRequestCRUD, BillingNotificationCRUD
-from bot.handlers.payment_callbacks import format_payment_request_message, get_payment_request_keyboard
+from bot.handlers.payments.callbacks import format_payment_request_message, get_payment_request_keyboard
 from .getters import get_request_details_data
 
 logger = logging.getLogger(__name__)

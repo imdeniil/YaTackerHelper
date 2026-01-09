@@ -7,7 +7,7 @@ from aiogram_dialog import DialogManager, ShowMode
 from aiogram_dialog.widgets.kbd import Button, Select
 from aiogram_dialog.widgets.input import MessageInput
 
-from bot.states import CloneProject
+from .states import CloneProject
 from src.tracker_client import TrackerClient
 from src.project_cloner import ProjectCloner
 from .constants import UPDATE_INTERVAL

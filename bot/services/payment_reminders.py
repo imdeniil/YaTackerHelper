@@ -6,7 +6,7 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from bot.database import get_session, PaymentRequestCRUD, PaymentRequestStatus, UserCRUD
-from bot.handlers.payment_callbacks import format_payment_request_message, get_payment_request_keyboard
+from bot.handlers.payments.callbacks import format_payment_request_message, get_payment_request_keyboard
 
 logger = logging.getLogger(__name__)
 

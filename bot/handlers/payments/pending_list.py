@@ -6,7 +6,7 @@ from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
 
 from bot.database import get_session, PaymentRequestCRUD, PaymentRequestStatus
-from bot.handlers.payment_callbacks import (
+from bot.handlers.payments.callbacks import (
     format_payment_request_message,
     get_payment_request_keyboard,
     UploadProof,

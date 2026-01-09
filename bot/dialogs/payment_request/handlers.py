@@ -6,9 +6,10 @@ from aiogram_dialog import DialogManager, ShowMode
 from aiogram_dialog.widgets.kbd import Button
 from aiogram_dialog.widgets.input import MessageInput
 
-from bot.states import PaymentRequestCreation, MainMenu
+from .states import PaymentRequestCreation
+from bot.dialogs.main_menu.states import MainMenu
 from bot.database import get_session, PaymentRequestCRUD, UserCRUD, BillingNotificationCRUD
-from bot.handlers.payment_callbacks import format_payment_request_message, get_payment_request_keyboard
+from bot.handlers.payments.callbacks import format_payment_request_message, get_payment_request_keyboard
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ from typing import Any
 from aiogram_dialog import DialogManager
 
 from bot.database import get_session, PaymentRequestCRUD
-from bot.handlers.payment_callbacks import format_payment_request_message
+from bot.handlers.payments.callbacks import format_payment_request_message
 
 
 async def get_title_data(dialog_manager: DialogManager, **kwargs) -> dict[str, Any]:

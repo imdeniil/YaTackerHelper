@@ -4,7 +4,7 @@ from aiogram_dialog import Window
 from aiogram_dialog.widgets.text import Const, Format
 from aiogram_dialog.widgets.kbd import Button, Cancel, ScrollingGroup, Select
 
-from bot.states import UserSettings as UserSettingsState
+from .states import UserSettings as UserSettingsState
 from .getters import get_user_settings_data
 from .handlers import (
     on_edit_queue,

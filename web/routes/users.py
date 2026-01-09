@@ -176,3 +176,20 @@ def setup_user_routes(app, config: WebConfig):
             logger.info(f"Owner {current_user_id} создал нового пользователя #{new_user.id}")
 
         return RedirectResponse('/users', status_code=303)
+
+    @app.get("/users/{user_id}/delete")
+    @require_auth
+    @require_role(UserRole.OWNER.value)
+    async def user_delete(sess, user_id: int):
+        """Деактивация пользователя (soft delete)"""
+        current_user_id = sess.get('user_id')
+
+        # Нельзя удалить самого себя
+        if current_user_id == user_id:
+            return RedirectResponse('/users', status_code=303)
+
+        async with get_session() as session:
+            await UserCRUD.deactivate_user(session, user_id)
+            logger.info(f"Owner {current_user_id} деактивировал пользователя #{user_id}")
+
+        return RedirectResponse('/users', status_code=303)

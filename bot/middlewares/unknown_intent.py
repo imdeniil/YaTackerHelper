@@ -6,7 +6,7 @@ from aiogram.types import ErrorEvent, CallbackQuery, InlineKeyboardMarkup, Inlin
 from aiogram_dialog.api.exceptions import UnknownIntent
 from aiogram_dialog import DialogManager, StartMode
 
-from bot.states import MainMenu
+from bot.dialogs.main_menu.states import MainMenu
 
 logger = logging.getLogger(__name__)
 

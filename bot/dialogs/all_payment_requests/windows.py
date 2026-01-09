@@ -4,7 +4,7 @@ from aiogram_dialog import Window
 from aiogram_dialog.widgets.kbd import Button, Cancel, ScrollingGroup, Select, Row
 from aiogram_dialog.widgets.text import Const, Format
 
-from bot.states import AllPaymentRequests
+from .states import AllPaymentRequests
 from .getters import get_all_requests_list_data, get_all_request_details_data
 from .handlers import (
     on_filter_active,

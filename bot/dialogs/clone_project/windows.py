@@ -7,7 +7,7 @@ from aiogram_dialog.widgets.kbd import Button, Back, Cancel, Select, ScrollingGr
 from aiogram_dialog.widgets.text import Const, Format, Progress
 from aiogram_dialog.widgets.input import MessageInput
 
-from bot.states import CloneProject
+from .states import CloneProject
 from .getters import (
     get_select_project_data,
     get_confirm_data,

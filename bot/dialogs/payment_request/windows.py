@@ -6,7 +6,8 @@ from aiogram_dialog.widgets.kbd import Button, Cancel, Column
 from aiogram_dialog.widgets.text import Const, Format
 from aiogram_dialog.widgets.input import MessageInput
 
-from bot.states import PaymentRequestCreation, MainMenu
+from .states import PaymentRequestCreation
+from bot.dialogs.main_menu.states import MainMenu
 from .getters import (
     get_title_data,
     get_amount_data,

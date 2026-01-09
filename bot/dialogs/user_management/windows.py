@@ -5,7 +5,7 @@ from aiogram_dialog.widgets.text import Const, Format
 from aiogram_dialog.widgets.kbd import Button, ScrollingGroup, Select, Cancel
 from aiogram_dialog.widgets.input import MessageInput
 
-from bot.states import UserManagement
+from .states import UserManagement
 from .getters import get_user_management_data
 from .handlers import (
     on_switch_to_create,

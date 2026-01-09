@@ -9,7 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram_dialog import DialogManager, StartMode
 
 from bot.database import get_session, PaymentRequestCRUD, UserCRUD, PaymentRequestStatus, BillingNotificationCRUD
-from bot.states import MainMenu
+from bot.dialogs.main_menu.states import MainMenu
 
 logger = logging.getLogger(__name__)
 

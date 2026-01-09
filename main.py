@@ -20,6 +20,8 @@ from bot.dialogs import (
     payment_request_creation_dialog,
     my_payment_requests_dialog,
     all_payment_requests_dialog,
+    payments_menu_dialog,
+    create_payment_dialog,
 )
 from bot.middlewares import AuthMiddleware, MessageCleanupMiddleware, unknown_intent_router
 from bot.database import init_db, init_default_owners
@@ -139,6 +141,8 @@ async def main(reset_database: bool = False, confirm_reset: bool = False, contin
     dp.include_router(payment_request_creation_dialog)
     dp.include_router(my_payment_requests_dialog)
     dp.include_router(all_payment_requests_dialog)
+    dp.include_router(payments_menu_dialog)
+    dp.include_router(create_payment_dialog)
 
     # Настройка aiogram-dialog
     setup_dialogs(dp)

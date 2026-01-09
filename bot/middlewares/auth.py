@@ -64,6 +64,11 @@ class AuthMiddleware(BaseMiddleware):
                 await self._send_unauthorized_message(event)
                 return  # Блокируем дальнейшую обработку
 
+            # Проверяем активность пользователя
+            if not user.is_active:
+                await self._send_deactivated_message(event)
+                return  # Блокируем дальнейшую обработку
+
             # Добавляем пользователя и настройки в middleware_data
             data["user"] = user
             data["user_settings"] = user.settings
@@ -77,6 +82,20 @@ class AuthMiddleware(BaseMiddleware):
             "❌ Доступ запрещен\n\n"
             "Вы не авторизованы для использования этого бота.\n"
             "Обратитесь к владельцу для получения доступа."
+        )
+
+        # Отправляем сообщение в зависимости от типа события
+        if event.message:
+            await event.message.answer(message_text)
+        elif event.callback_query:
+            await event.callback_query.answer(message_text, show_alert=True)
+
+    async def _send_deactivated_message(self, event: Update) -> None:
+        """Отправляет сообщение о том что аккаунт пользователя деактивирован"""
+        message_text = (
+            "❌ Аккаунт деактивирован\n\n"
+            "Ваш аккаунт был деактивирован.\n"
+            "Обратитесь к владельцу для восстановления доступа."
         )
 
         # Отправляем сообщение в зависимости от типа события

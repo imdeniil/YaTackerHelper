@@ -31,6 +31,7 @@ class User(Base):
         display_name: ФИО пользователя (для отображения)
         role: Роль пользователя (owner/manager/worker)
         is_billing_contact: Флаг контактного лица для счетов и уведомлений об оплате
+        is_active: Флаг активности пользователя (soft delete)
         created_at: Дата создания записи
         settings: Связь 1:1 с настройками пользователя
     """
@@ -43,6 +44,7 @@ class User(Base):
     display_name = Column(String, nullable=False)
     role = Column(SQLEnum(UserRole), nullable=False, default=UserRole.WORKER)
     is_billing_contact = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
