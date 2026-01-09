@@ -135,15 +135,15 @@ def payment_request_table(requests: List[PaymentRequest], show_creator: bool = F
 
 def user_row(user: User) -> Tr:
     """Строка таблицы пользователя"""
-    role_badge_colors = {
-        UserRole.OWNER: ("badge-error badge-outline", "👑"),
-        UserRole.MANAGER: ("badge-warning badge-outline", "📊"),
-        UserRole.WORKER: ("badge-info badge-outline", "👷"),
+    role_config = {
+        UserRole.OWNER: ("badge-error badge-outline", "👑", "Владелец"),
+        UserRole.MANAGER: ("badge-warning badge-outline", "📊", "Менеджер"),
+        UserRole.WORKER: ("badge-info badge-outline", "👷", "Сотрудник"),
     }
 
     # Преобразуем строку в enum если нужно
     role = user.role if isinstance(user.role, UserRole) else UserRole(user.role)
-    badge_color, role_icon = role_badge_colors.get(role, ("badge-ghost", "👤"))
+    badge_color, role_icon, role_name = role_config.get(role, ("badge-ghost", "👤", "Неизвестно"))
 
     # Иконка плательщика
     billing_icon = "✅" if user.is_billing_contact else "❌"
@@ -152,7 +152,7 @@ def user_row(user: User) -> Tr:
         Th(str(user.id)),
         Td(user.display_name),
         Td(f"@{user.telegram_username}" if user.telegram_username else "-"),
-        Td(Span(f"{role_icon} {role.value.upper()}", cls=f"badge {badge_color}")),
+        Td(Span(f"{role_icon} {role_name}", cls=f"badge {badge_color}")),
         Td(billing_icon, cls="text-center"),
         Td(user.created_at.strftime("%d.%m.%Y") if user.created_at else "-"),
         cls="hover cursor-pointer",
@@ -177,7 +177,7 @@ def user_table(users: List[User]) -> Div:
                         Th("ФИО"),
                         Th("Username"),
                         Th("Роль"),
-                        Th("Плательщик"),
+                        Th("Плательщик", cls="text-center"),
                         Th("Создан")
                     )
                 ),

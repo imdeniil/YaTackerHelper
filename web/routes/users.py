@@ -40,7 +40,7 @@ def setup_user_routes(app, config: WebConfig):
             Div(
                 Div(
                     user_table(users),
-                    cls="card-body p-0"
+                    cls="card-body"
                 ),
                 cls="card bg-base-100 shadow-xl"
             )
