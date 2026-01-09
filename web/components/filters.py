@@ -140,7 +140,7 @@ def advanced_filters(
                         cls="dropdown w-full",
                         id="status-dropdown"
                     ),
-                    cls="form-control mb-3" if show_creator_filter else "form-control"
+                    cls="form-control mb-2" if show_creator_filter else "form-control"
                 ),
 
                 # Фильтр по создателю (только для Owner/Manager)
