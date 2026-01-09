@@ -409,16 +409,13 @@ def user_edit_form(user: User) -> Form:
 
         # Плательщик
         Div(
-            Label(
-                Input(
-                    type_="checkbox",
-                    name="is_billing_contact",
-                    value="true",
-                    checked=user.is_billing_contact,
-                    cls="toggle toggle-primary"
-                ),
-                Span("Плательщик", cls="label-text"),
-                cls="label cursor-pointer gap-4"
+            Label("Плательщик", cls="label"),
+            Input(
+                type_="checkbox",
+                name="is_billing_contact",
+                value="true",
+                checked=user.is_billing_contact,
+                cls="toggle toggle-primary"
             ),
             cls="form-control mb-4"
         ),
@@ -492,15 +489,12 @@ def user_create_form() -> Form:
 
         # Плательщик
         Div(
-            Label(
-                Input(
-                    type_="checkbox",
-                    name="is_billing_contact",
-                    value="true",
-                    cls="toggle toggle-primary"
-                ),
-                Span("Плательщик", cls="label-text"),
-                cls="label cursor-pointer gap-4"
+            Label("Плательщик", cls="label"),
+            Input(
+                type_="checkbox",
+                name="is_billing_contact",
+                value="true",
+                cls="toggle toggle-primary"
             ),
             cls="form-control mb-4"
         ),
