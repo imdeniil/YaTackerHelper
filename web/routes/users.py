@@ -51,7 +51,7 @@ def setup_user_routes(app, config: WebConfig):
         if not avatar_url:
             avatar_url = get_fallback_avatar_url(display_name)
 
-        return page_layout("Управление пользователями", content, display_name, role, avatar_url)
+        return page_layout("Пользователи", content, display_name, role, avatar_url)
 
     @app.get("/users/{user_id}/edit")
     @require_auth

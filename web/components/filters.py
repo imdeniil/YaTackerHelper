@@ -72,7 +72,7 @@ def advanced_filters(
                     Details(
                         Summary(
                             Span(
-                                f"{len(current_statuses)} Selected" if current_statuses else "Статусы",
+                                f"Выбрано {len(current_statuses)}" if current_statuses else "Статусы",
                                 id="status-summary-text"
                             ),
                             Span("▼", cls="ml-auto", id="status-arrow", style="font-size: 0.75rem;"),

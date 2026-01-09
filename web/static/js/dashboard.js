@@ -2,6 +2,63 @@
  * Dashboard JavaScript - Основные функции для работы с dashboard
  */
 
+// ==================== ФОРМАТИРОВАНИЕ СУММ ====================
+
+/**
+ * Форматирует число с разделителями разрядов (пробелами)
+ * @param {string|number} value - значение для форматирования
+ * @returns {string} - отформатированное значение
+ */
+function formatAmount(value) {
+    // Убираем все нецифровые символы кроме точки и запятой
+    let cleanValue = String(value).replace(/[^\d.,]/g, '');
+    // Заменяем запятую на точку для унификации
+    cleanValue = cleanValue.replace(',', '.');
+
+    // Разделяем на целую и дробную части
+    const parts = cleanValue.split('.');
+    let integerPart = parts[0] || '';
+    const decimalPart = parts[1];
+
+    // Форматируем целую часть с пробелами
+    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+    // Собираем обратно
+    if (decimalPart !== undefined) {
+        return integerPart + '.' + decimalPart;
+    }
+    return integerPart;
+}
+
+/**
+ * Обработчик ввода суммы - форматирует на лету
+ * @param {HTMLInputElement} input - поле ввода
+ */
+function handleAmountInput(input) {
+    const cursorPos = input.selectionStart;
+    const oldLength = input.value.length;
+
+    input.value = formatAmount(input.value);
+
+    // Корректируем позицию курсора
+    const newLength = input.value.length;
+    const diff = newLength - oldLength;
+    input.setSelectionRange(cursorPos + diff, cursorPos + diff);
+}
+
+/**
+ * Инициализация форматирования сумм для всех полей
+ */
+function initAmountFormatting() {
+    // Поле суммы в модальном окне создания
+    const modalAmount = document.getElementById('modal-amount');
+    if (modalAmount) {
+        modalAmount.addEventListener('input', function() {
+            handleAmountInput(this);
+        });
+    }
+}
+
 // ==================== МОДАЛЬНЫЕ ОКНА ====================
 
 /**
@@ -92,7 +149,7 @@ function updateStatusCount() {
 
     if (summaryText) {
         if (count > 0) {
-            summaryText.textContent = count + ' Selected';
+            summaryText.textContent = 'Выбрано ' + count;
         } else {
             summaryText.textContent = 'Статусы';
         }
@@ -620,6 +677,9 @@ document.addEventListener('DOMContentLoaded', function() {
             handlePaginationClick(event);
         }
     });
+
+    // Инициализация форматирования сумм
+    initAmountFormatting();
 
     // Закрытие dropdown при клике вне его области
     document.addEventListener('click', function(event) {

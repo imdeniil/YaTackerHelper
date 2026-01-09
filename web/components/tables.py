@@ -1,10 +1,43 @@
 """Table компоненты"""
 
+import re
 from typing import List, Optional
 from fasthtml.common import *
 from bot.database.models import PaymentRequest, User, UserRole
 from .cards import status_badge
 from .pagination import pagination_footer
+
+
+def format_amount(amount: str) -> str:
+    """Форматирует сумму с разделителями разрядов (пробелами)
+
+    Args:
+        amount: Сумма в виде строки
+
+    Returns:
+        Отформатированная строка с пробелами между разрядами
+    """
+    # Убираем существующие пробелы и другие разделители
+    clean_amount = re.sub(r'[^\d.,]', '', str(amount))
+    # Заменяем запятую на точку
+    clean_amount = clean_amount.replace(',', '.')
+
+    # Разделяем на целую и дробную части
+    parts = clean_amount.split('.')
+    integer_part = parts[0] if parts else ''
+    decimal_part = parts[1] if len(parts) > 1 else None
+
+    # Форматируем целую часть с пробелами (каждые 3 цифры с конца)
+    formatted_integer = ''
+    for i, digit in enumerate(reversed(integer_part)):
+        if i > 0 and i % 3 == 0:
+            formatted_integer = ' ' + formatted_integer
+        formatted_integer = digit + formatted_integer
+
+    # Собираем обратно
+    if decimal_part is not None:
+        return f"{formatted_integer}.{decimal_part}"
+    return formatted_integer
 
 
 def payment_request_row(request: PaymentRequest, show_creator: bool = False) -> Tr:
@@ -38,7 +71,7 @@ def payment_request_row(request: PaymentRequest, show_creator: bool = False) -> 
         Th(str(request.id)),
         Td(request.title),
         creator_cell,
-        Td(f"{request.amount} ₽"),
+        Td(f"{format_amount(request.amount)} ₽"),
         Td(status_badge(request.status)),
         Td(invoice_icon),
         Td(payment_proof_icon),

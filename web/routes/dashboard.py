@@ -193,7 +193,7 @@ async def _worker_dashboard(
     if not avatar_url:
         avatar_url = get_fallback_avatar_url(user.display_name)
 
-    return page_layout("Worker Dashboard", content, user.display_name, user.role.value, avatar_url)
+    return page_layout("Главная", content, user.display_name, user.role.value, avatar_url)
 
 
 async def _owner_dashboard(
@@ -307,4 +307,4 @@ async def _owner_dashboard(
     if not avatar_url:
         avatar_url = get_fallback_avatar_url(user.display_name)
 
-    return page_layout(f"{role.upper()} Dashboard", content, user.display_name, user.role.value, avatar_url)
+    return page_layout("Главная", content, user.display_name, user.role.value, avatar_url)
