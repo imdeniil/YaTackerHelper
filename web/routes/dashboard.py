@@ -1,154 +1,21 @@
 """Маршруты dashboard для разных ролей"""
 
 import logging
-from functools import wraps
 from fasthtml.common import *
 from web.database import get_session, UserCRUD, PaymentRequestCRUD
 from web.config import WebConfig
 from web.components import (
     page_layout, stat_item, payment_request_table,
-    create_payment_form, create_payment_modal, analytics_modal, filter_tabs, user_table, card,
-    payment_request_detail, user_edit_form, user_create_form,
-    advanced_filters
+    create_payment_modal, analytics_modal, advanced_filters
 )
-from web.telegram_utils import (
-    get_user_profile_photo_url, get_fallback_avatar_url, upload_file_to_storage,
-    send_telegram_message, send_telegram_document
-)
+from web.telegram_utils import get_user_profile_photo_url, get_fallback_avatar_url
 from bot.database.models import UserRole, PaymentRequestStatus
-from bot.database.crud import BillingNotificationCRUD
+from .decorators import require_auth
+from .payments import setup_payment_routes
+from .users import setup_user_routes
+from .export import setup_export_routes
 
 logger = logging.getLogger(__name__)
-
-
-def require_auth(f):
-    """Декоратор для проверки авторизации"""
-    @wraps(f)
-    async def wrapper(sess, *args, **kwargs):
-        user_id = sess.get('user_id')
-        if not user_id:
-            return RedirectResponse('/login', status_code=303)
-        return await f(sess, *args, **kwargs)
-    return wrapper
-
-
-def require_role(*allowed_roles):
-    """Декоратор для проверки роли"""
-    def decorator(f):
-        @wraps(f)
-        async def wrapper(sess, *args, **kwargs):
-            role = sess.get('role')
-            if role not in allowed_roles:
-                return RedirectResponse('/dashboard', status_code=303)
-            return await f(sess, *args, **kwargs)
-        return wrapper
-    return decorator
-
-
-def _format_payment_request_message(payment_request, created_by_name: str) -> str:
-    """Форматирует сообщение для billing контактов (аналогично боту)"""
-    status_emoji = {
-        PaymentRequestStatus.PENDING: "⏳",
-        PaymentRequestStatus.SCHEDULED_TODAY: "📅",
-        PaymentRequestStatus.SCHEDULED_DATE: "📅",
-        PaymentRequestStatus.PAID: "✅",
-        PaymentRequestStatus.CANCELLED: "❌",
-    }
-
-    status_text = {
-        PaymentRequestStatus.PENDING: "Ожидает оплаты",
-        PaymentRequestStatus.SCHEDULED_TODAY: "Оплачу сегодня",
-        PaymentRequestStatus.SCHEDULED_DATE: f"Запланировано",
-        PaymentRequestStatus.PAID: "Оплачено",
-        PaymentRequestStatus.CANCELLED: "Отменено",
-    }
-
-    message = (
-        f"{status_emoji.get(payment_request.status, '❓')} <b>Запрос на оплату #{payment_request.id}</b>\n\n"
-        f"<b>Статус:</b> {status_text.get(payment_request.status, 'Неизвестно')}\n"
-        f"<b>Название:</b> {payment_request.title}\n"
-        f"<b>Сумма:</b> {payment_request.amount} ₽\n"
-        f"<b>Комментарий:</b> {payment_request.comment}\n\n"
-        f"<b>Создал:</b> {created_by_name}\n"
-        f"<b>Дата создания:</b> {payment_request.created_at.strftime('%d.%m.%Y %H:%M')}\n"
-    )
-
-    return message
-
-
-def _get_payment_keyboard(request_id: int) -> dict:
-    """Возвращает inline клавиатуру для запроса на оплату"""
-    return {
-        "inline_keyboard": [
-            [{"text": "✅ Оплачено", "callback_data": f"pay_paid:{request_id}"}],
-            [{"text": "📅 Запланировать", "callback_data": f"pay_schedule:{request_id}"}],
-            [{"text": "❌ Отменить", "callback_data": f"pay_cancel:{request_id}"}],
-        ]
-    }
-
-
-async def _notify_billing_contacts_about_new_payment(
-    session,
-    config,
-    payment_request,
-    user,
-    invoice_file_id: str = None
-):
-    """Отправляет уведомления всем billing контактам о новом запросе на оплату
-
-    Args:
-        session: Сессия БД
-        config: Конфигурация (содержит bot_token)
-        payment_request: Созданный запрос на оплату
-        user: Пользователь-создатель
-        invoice_file_id: ID файла счета (опционально)
-    """
-    # Получаем billing контакты
-    billing_contacts = await UserCRUD.get_billing_contacts(session)
-
-    if not billing_contacts:
-        logger.warning("No billing contacts found for payment notification!")
-        return
-
-    # Формируем сообщение
-    message_text = _format_payment_request_message(payment_request, user.display_name)
-    keyboard = _get_payment_keyboard(payment_request.id)
-
-    # Отправляем уведомление ВСЕМ billing контактам
-    for billing_contact in billing_contacts:
-        if billing_contact.telegram_id:
-            try:
-                # Отправляем сообщение
-                message_id = await send_telegram_message(
-                    bot_token=config.bot_token,
-                    chat_id=billing_contact.telegram_id,
-                    text=message_text,
-                    reply_markup=keyboard
-                )
-
-                if message_id:
-                    # Сохраняем уведомление в базу
-                    await BillingNotificationCRUD.create_billing_notification(
-                        session=session,
-                        payment_request_id=payment_request.id,
-                        billing_user_id=billing_contact.id,
-                        message_id=message_id,
-                        chat_id=billing_contact.telegram_id,
-                    )
-
-                    logger.info(f"Notification sent to billing contact {billing_contact.telegram_username}")
-
-                    # Если есть счет, отправляем его отдельным документом
-                    if invoice_file_id:
-                        await send_telegram_document(
-                            bot_token=config.bot_token,
-                            chat_id=billing_contact.telegram_id,
-                            document_file_id=invoice_file_id,
-                            caption=f"📎 Счет к запросу #{payment_request.id}"
-                        )
-
-            except Exception as e:
-                logger.error(f"Error sending notification to {billing_contact.telegram_username}: {e}")
 
 
 def setup_dashboard_routes(app, config: WebConfig):
@@ -158,6 +25,10 @@ def setup_dashboard_routes(app, config: WebConfig):
         app: FastHTML приложение
         config: Конфигурация веб-приложения
     """
+    # Регистрируем дочерние маршруты
+    setup_payment_routes(app, config)
+    setup_user_routes(app, config)
+    setup_export_routes(app, config)
 
     @app.get("/dashboard")
     @require_auth
@@ -178,18 +49,15 @@ def setup_dashboard_routes(app, config: WebConfig):
         """Главная страница dashboard - роутинг по ролям"""
         user_id = sess.get('user_id')
         role = sess.get('role')
-        display_name = sess.get('display_name')
 
         # Валидация параметров
-        page = max(1, page)  # Минимум 1
+        page = max(1, page)
         per_page = per_page if per_page in [10, 20, 25, 50, 100] else 20
 
-        # Извлекаем статусы из query string (FastHTML не парсит списки автоматически)
-        # Пробуем через query_params.getlist (Starlette)
+        # Извлекаем статусы из query string
         try:
             statuses = request.query_params.getlist('status') if hasattr(request, 'query_params') else []
         except:
-            # Fallback - парсим вручную
             from urllib.parse import parse_qs
             query_string = str(request.url.query) if request.url.query else ""
             query_params = parse_qs(query_string)
@@ -210,12 +78,12 @@ def setup_dashboard_routes(app, config: WebConfig):
 
             # Роутинг по ролям
             if role == UserRole.WORKER.value:
-                return await worker_dashboard(
+                return await _worker_dashboard(
                     session, user, statuses, search, date_from, date_to, date_type,
                     amount_min_float, amount_max_float, page, per_page, config.bot_token
                 )
             elif role in [UserRole.OWNER.value, UserRole.MANAGER.value]:
-                return await owner_dashboard(
+                return await _owner_dashboard(
                     session, user, role, statuses, search, date_from, date_to, date_type,
                     amount_min_float, amount_max_float, creator_id, page, per_page, config.bot_token
                 )
@@ -223,709 +91,220 @@ def setup_dashboard_routes(app, config: WebConfig):
         # Fallback
         return RedirectResponse('/login', status_code=303)
 
-    async def worker_dashboard(
-        session, user, statuses, search, date_from, date_to, date_type,
-        amount_min, amount_max, page, per_page, bot_token
-    ):
-        """Dashboard для Worker - создание и просмотр своих запросов"""
-        # Подсчет общего количества записей с учетом фильтров
-        total_items = await PaymentRequestCRUD.count_payment_requests_advanced(
-            session=session,
-            user_id=user.id,
-            statuses=statuses if len(statuses) > 0 else None,
-            search_query=search if search else None,
-            date_from=date_from if date_from else None,
-            date_to=date_to if date_to else None,
-            date_type=date_type,
-            amount_min=amount_min,
-            amount_max=amount_max
-        )
 
-        # Подсчет страниц
-        total_pages = (total_items + per_page - 1) // per_page  # Округление вверх
+async def _worker_dashboard(
+    session, user, statuses, search, date_from, date_to, date_type,
+    amount_min, amount_max, page, per_page, bot_token
+):
+    """Dashboard для Worker - создание и просмотр своих запросов"""
+    # Подсчет общего количества записей с учетом фильтров
+    total_items = await PaymentRequestCRUD.count_payment_requests_advanced(
+        session=session,
+        user_id=user.id,
+        statuses=statuses if len(statuses) > 0 else None,
+        search_query=search if search else None,
+        date_from=date_from if date_from else None,
+        date_to=date_to if date_to else None,
+        date_type=date_type,
+        amount_min=amount_min,
+        amount_max=amount_max
+    )
 
-        # Получаем запросы с расширенными фильтрами
-        skip = (page - 1) * per_page
-        requests = await PaymentRequestCRUD.get_payment_requests_advanced(
-            session=session,
-            user_id=user.id,
-            statuses=statuses if len(statuses) > 0 else None,
-            search_query=search if search else None,
-            date_from=date_from if date_from else None,
-            date_to=date_to if date_to else None,
-            date_type=date_type,
-            amount_min=amount_min,
-            amount_max=amount_max,
-            skip=skip,
-            limit=per_page
-        )
+    # Подсчет страниц
+    total_pages = (total_items + per_page - 1) // per_page
 
-        # Статистика (на основе всех запросов пользователя, без фильтров)
-        all_requests = await PaymentRequestCRUD.get_payment_requests_advanced(
-            session, user_id=user.id, skip=0, limit=10000
-        )
-        total_amount = sum(float(r.amount.replace(" ", "").replace(",", ".")) for r in all_requests if r.status == PaymentRequestStatus.PAID.value)
-        pending_count = len([r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value])
+    # Получаем запросы с расширенными фильтрами
+    skip = (page - 1) * per_page
+    requests = await PaymentRequestCRUD.get_payment_requests_advanced(
+        session=session,
+        user_id=user.id,
+        statuses=statuses if len(statuses) > 0 else None,
+        search_query=search if search else None,
+        date_from=date_from if date_from else None,
+        date_to=date_to if date_to else None,
+        date_type=date_type,
+        amount_min=amount_min,
+        amount_max=amount_max,
+        skip=skip,
+        limit=per_page
+    )
 
-        # Данные для пагинации
-        pagination_data = {
-            'current_page': page,
-            'total_pages': total_pages,
-            'per_page': per_page,
-            'total_items': total_items,
-            'filter_status': 'all'  # Для обратной совместимости
-        }
+    # Статистика (на основе всех запросов пользователя, без фильтров)
+    all_requests = await PaymentRequestCRUD.get_payment_requests_advanced(
+        session, user_id=user.id, skip=0, limit=10000
+    )
+    total_amount = sum(float(r.amount.replace(" ", "").replace(",", ".")) for r in all_requests if r.status == PaymentRequestStatus.PAID.value)
+    pending_count = len([r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value])
 
-        # Статистика для модального окна
-        stats_items = [
-            stat_item("Всего запросов", str(len(all_requests)), "📊"),
-            stat_item("Ожидает оплаты", str(pending_count), "⏳"),
-            stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰")
-        ]
+    # Данные для пагинации
+    pagination_data = {
+        'current_page': page,
+        'total_pages': total_pages,
+        'per_page': per_page,
+        'total_items': total_items,
+        'filter_status': 'all'
+    }
 
-        content = Div(
-            # Расширенные фильтры (без заголовка)
+    # Статистика для модального окна
+    stats_items = [
+        stat_item("Всего запросов", str(len(all_requests)), "📊"),
+        stat_item("Ожидает оплаты", str(pending_count), "⏳"),
+        stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰")
+    ]
+
+    content = Div(
+        # Расширенные фильтры
+        Div(
             Div(
-                Div(
-                    advanced_filters(
-                        current_statuses=statuses,
-                        search_query=search,
-                        date_from=date_from,
-                        date_to=date_to,
-                        date_type=date_type,
-                        amount_min=str(amount_min) if amount_min else "",
-                        amount_max=str(amount_max) if amount_max else "",
-                        show_creator_filter=False,
-                        per_page=per_page
-                    ),
-                    cls="card-body"
+                advanced_filters(
+                    current_statuses=statuses,
+                    search_query=search,
+                    date_from=date_from,
+                    date_to=date_to,
+                    date_type=date_type,
+                    amount_min=str(amount_min) if amount_min else "",
+                    amount_max=str(amount_max) if amount_max else "",
+                    show_creator_filter=False,
+                    per_page=per_page
                 ),
-                cls="card bg-base-100 shadow-xl my-4"
+                cls="card-body"
             ),
+            cls="card bg-base-100 shadow-xl my-4"
+        ),
 
-            # Таблица с пагинацией
+        # Таблица с пагинацией
+        Div(
             Div(
-                Div(
-                    payment_request_table(requests, show_creator=False, pagination_data=pagination_data),
-                    cls="card-body p-3"
+                payment_request_table(requests, show_creator=False, pagination_data=pagination_data),
+                cls="card-body p-3"
+            ),
+            cls="card bg-base-100 shadow-xl my-4"
+        ),
+
+        # Модальное окно создания
+        create_payment_modal(user_role=user.role.value),
+
+        # Модальное окно аналитики
+        analytics_modal(stats_items)
+    )
+
+    # Получаем аватар из Telegram
+    avatar_url = await get_user_profile_photo_url(bot_token, user.telegram_id)
+    if not avatar_url:
+        avatar_url = get_fallback_avatar_url(user.display_name)
+
+    return page_layout("Worker Dashboard", content, user.display_name, user.role.value, avatar_url)
+
+
+async def _owner_dashboard(
+    session, user, role, statuses, search, date_from, date_to, date_type,
+    amount_min, amount_max, creator_id, page, per_page, bot_token
+):
+    """Dashboard для Owner/Manager - просмотр всех запросов и статистика"""
+    # Получаем список всех пользователей для фильтра
+    all_users = await UserCRUD.get_all_users(session)
+
+    # Подсчет общего количества записей с учетом фильтров
+    total_items = await PaymentRequestCRUD.count_payment_requests_advanced(
+        session=session,
+        statuses=statuses if len(statuses) > 0 else None,
+        search_query=search if search else None,
+        date_from=date_from if date_from else None,
+        date_to=date_to if date_to else None,
+        date_type=date_type,
+        amount_min=amount_min,
+        amount_max=amount_max,
+        creator_id=creator_id
+    )
+
+    # Подсчет страниц
+    total_pages = (total_items + per_page - 1) // per_page
+
+    # Получаем запросы с расширенными фильтрами
+    skip = (page - 1) * per_page
+    requests = await PaymentRequestCRUD.get_payment_requests_advanced(
+        session=session,
+        statuses=statuses if len(statuses) > 0 else None,
+        search_query=search if search else None,
+        date_from=date_from if date_from else None,
+        date_to=date_to if date_to else None,
+        date_type=date_type,
+        amount_min=amount_min,
+        amount_max=amount_max,
+        creator_id=creator_id,
+        skip=skip,
+        limit=per_page
+    )
+
+    # Статистика (на основе всех запросов системы, без фильтров)
+    all_requests = await PaymentRequestCRUD.get_payment_requests_advanced(
+        session, skip=0, limit=10000
+    )
+    total_amount = sum(float(r.amount.replace(" ", "").replace(",", ".")) for r in all_requests if r.status == PaymentRequestStatus.PAID.value)
+    pending_count = len([r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value])
+    scheduled_count = len([r for r in all_requests if r.status in [
+        PaymentRequestStatus.SCHEDULED_TODAY.value,
+        PaymentRequestStatus.SCHEDULED_DATE.value
+    ]])
+
+    # Данные для пагинации
+    pagination_data = {
+        'current_page': page,
+        'total_pages': total_pages,
+        'per_page': per_page,
+        'total_items': total_items,
+        'filter_status': 'all'
+    }
+
+    # Статистика для модального окна
+    stats_items = [
+        stat_item("Всего запросов", str(len(all_requests)), "📊"),
+        stat_item("Ожидает оплаты", str(pending_count), "⏳"),
+        stat_item("Запланировано", str(scheduled_count), "📅"),
+        stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰")
+    ]
+
+    content = Div(
+        # Расширенные фильтры
+        Div(
+            Div(
+                advanced_filters(
+                    current_statuses=statuses,
+                    search_query=search,
+                    date_from=date_from,
+                    date_to=date_to,
+                    date_type=date_type,
+                    amount_min=str(amount_min) if amount_min else "",
+                    amount_max=str(amount_max) if amount_max else "",
+                    creator_id=creator_id,
+                    users=all_users,
+                    show_creator_filter=True,
+                    per_page=per_page
                 ),
-                cls="card bg-base-100 shadow-xl my-4"
+                cls="card-body"
             ),
+            cls="card bg-base-100 shadow-xl my-4"
+        ),
 
-            # Модальное окно создания
-            create_payment_modal(user_role=user.role.value),
-
-            # Модальное окно аналитики
-            analytics_modal(stats_items)
-        )
-
-        # Получаем аватар из Telegram
-        avatar_url = await get_user_profile_photo_url(bot_token, user.telegram_id)
-        if not avatar_url:
-            avatar_url = get_fallback_avatar_url(user.display_name)
-
-        return page_layout("Worker Dashboard", content, user.display_name, user.role.value, avatar_url)
-
-    async def owner_dashboard(
-        session, user, role, statuses, search, date_from, date_to, date_type,
-        amount_min, amount_max, creator_id, page, per_page, bot_token
-    ):
-        """Dashboard для Owner/Manager - просмотр всех запросов и статистика"""
-        # Получаем список всех пользователей для фильтра
-        all_users = await UserCRUD.get_all_users(session)
-
-        # Подсчет общего количества записей с учетом фильтров
-        total_items = await PaymentRequestCRUD.count_payment_requests_advanced(
-            session=session,
-            statuses=statuses if len(statuses) > 0 else None,
-            search_query=search if search else None,
-            date_from=date_from if date_from else None,
-            date_to=date_to if date_to else None,
-            date_type=date_type,
-            amount_min=amount_min,
-            amount_max=amount_max,
-            creator_id=creator_id
-        )
-
-        # Подсчет страниц
-        total_pages = (total_items + per_page - 1) // per_page  # Округление вверх
-
-        # Получаем запросы с расширенными фильтрами
-        skip = (page - 1) * per_page
-        requests = await PaymentRequestCRUD.get_payment_requests_advanced(
-            session=session,
-            statuses=statuses if len(statuses) > 0 else None,
-            search_query=search if search else None,
-            date_from=date_from if date_from else None,
-            date_to=date_to if date_to else None,
-            date_type=date_type,
-            amount_min=amount_min,
-            amount_max=amount_max,
-            creator_id=creator_id,
-            skip=skip,
-            limit=per_page
-        )
-
-        # Статистика (на основе всех запросов системы, без фильтров)
-        all_requests = await PaymentRequestCRUD.get_payment_requests_advanced(
-            session, skip=0, limit=10000
-        )
-        total_amount = sum(float(r.amount.replace(" ", "").replace(",", ".")) for r in all_requests if r.status == PaymentRequestStatus.PAID.value)
-        pending_count = len([r for r in all_requests if r.status == PaymentRequestStatus.PENDING.value])
-        scheduled_count = len([r for r in all_requests if r.status in [
-            PaymentRequestStatus.SCHEDULED_TODAY.value,
-            PaymentRequestStatus.SCHEDULED_DATE.value
-        ]])
-
-        # Данные для пагинации
-        pagination_data = {
-            'current_page': page,
-            'total_pages': total_pages,
-            'per_page': per_page,
-            'total_items': total_items,
-            'filter_status': 'all'  # Для обратной совместимости
-        }
-
-        # Статистика для модального окна
-        stats_items = [
-            stat_item("Всего запросов", str(len(all_requests)), "📊"),
-            stat_item("Ожидает оплаты", str(pending_count), "⏳"),
-            stat_item("Запланировано", str(scheduled_count), "📅"),
-            stat_item("Оплачено всего", f"{total_amount:,.0f} ₽", "💰")
-        ]
-
-        content = Div(
-            # Расширенные фильтры (без заголовка)
+        # Таблица с пагинацией
+        Div(
             Div(
-                Div(
-                    advanced_filters(
-                        current_statuses=statuses,
-                        search_query=search,
-                        date_from=date_from,
-                        date_to=date_to,
-                        date_type=date_type,
-                        amount_min=str(amount_min) if amount_min else "",
-                        amount_max=str(amount_max) if amount_max else "",
-                        creator_id=creator_id,
-                        users=all_users,
-                        show_creator_filter=True,
-                        per_page=per_page
-                    ),
-                    cls="card-body"
-                ),
-                cls="card bg-base-100 shadow-xl my-4"
+                payment_request_table(requests, show_creator=True, pagination_data=pagination_data),
+                cls="card-body p-3"
             ),
+            cls="card bg-base-100 shadow-xl my-4"
+        ),
 
-            # Таблица с пагинацией
-            Div(
-                Div(
-                    payment_request_table(requests, show_creator=True, pagination_data=pagination_data),
-                    cls="card-body p-3"
-                ),
-                cls="card bg-base-100 shadow-xl my-4"
-            ),
+        # Модальное окно создания
+        create_payment_modal(user_role=role),
 
-            # Модальное окно создания
-            create_payment_modal(user_role=role),
+        # Модальное окно аналитики
+        analytics_modal(stats_items)
+    )
 
-            # Модальное окно аналитики
-            analytics_modal(stats_items)
-        )
+    # Получаем аватар из Telegram
+    avatar_url = await get_user_profile_photo_url(bot_token, user.telegram_id)
+    if not avatar_url:
+        avatar_url = get_fallback_avatar_url(user.display_name)
 
-        # Получаем аватар из Telegram
-        avatar_url = await get_user_profile_photo_url(bot_token, user.telegram_id)
-        if not avatar_url:
-            avatar_url = get_fallback_avatar_url(user.display_name)
-
-        return page_layout(f"{role.upper()} Dashboard", content, user.display_name, user.role.value, avatar_url)
-
-    @app.post("/payment/create")
-    @require_auth
-    async def create_payment_request(
-        sess,
-        request,
-        title: str,
-        amount: str,
-        comment: str,
-        invoice_file_id: str = "",
-        payment_file_id: str = "",
-        created_date: str = "",
-        status: str = "pending",
-        paid_date: str = "",
-        scheduled_date: str = ""
-    ):
-        """Создание нового запроса на оплату с полной поддержкой всех полей"""
-        user_id = sess.get('user_id')
-        role = sess.get('role')
-
-        # Проверяем что пользователь существует
-        async with get_session() as session:
-            user = await UserCRUD.get_user_by_id(session, user_id)
-            if not user:
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'text/html' not in request.headers.get('Accept', ''):
-                    return {"success": False, "error": "User not found"}
-                return RedirectResponse('/login', status_code=303)
-
-            # Обрабатываем даты
-            from datetime import datetime
-            created_at = None
-            if created_date and role in [UserRole.OWNER.value, UserRole.MANAGER.value]:
-                try:
-                    created_at = datetime.strptime(created_date, "%Y-%m-%d")
-                except ValueError:
-                    pass
-
-            paid_at = None
-            if paid_date and status == "paid" and role in [UserRole.OWNER.value, UserRole.MANAGER.value]:
-                try:
-                    paid_at = datetime.strptime(paid_date, "%Y-%m-%d")
-                except ValueError:
-                    pass
-
-            scheduled_date_obj = None
-            if scheduled_date and status == "scheduled" and role in [UserRole.OWNER.value, UserRole.MANAGER.value]:
-                try:
-                    scheduled_date_obj = datetime.strptime(scheduled_date, "%Y-%m-%d").date()
-                except ValueError:
-                    pass
-
-            # Определяем итоговый статус
-            final_status = PaymentRequestStatus.PENDING  # По умолчанию для Worker
-            if role in [UserRole.OWNER.value, UserRole.MANAGER.value]:
-                if status == "paid":
-                    final_status = PaymentRequestStatus.PAID
-                elif status == "scheduled":
-                    final_status = PaymentRequestStatus.SCHEDULED_DATE
-                else:
-                    final_status = PaymentRequestStatus.PENDING
-
-            # Создаем запрос
-            payment_request = await PaymentRequestCRUD.create_payment_request(
-                session=session,
-                created_by_id=user_id,
-                title=title,
-                amount=amount,
-                comment=comment,
-                invoice_file_id=invoice_file_id if invoice_file_id else None,
-                payment_proof_file_id=payment_file_id if payment_file_id else None,
-                status=final_status,
-                created_at=created_at,
-                paid_at=paid_at,
-                paid_by_id=user_id if final_status == PaymentRequestStatus.PAID else None,
-                scheduled_date=scheduled_date_obj
-            )
-
-            logger.info(f"User {user_id} ({role}) создал запрос на оплату #{payment_request.id} со статусом {final_status.value}")
-
-            # Для Worker отправляем уведомления billing контактам (только для статуса PENDING)
-            if role == UserRole.WORKER.value and final_status == PaymentRequestStatus.PENDING:
-                await _notify_billing_contacts_about_new_payment(
-                    session=session,
-                    config=config,
-                    payment_request=payment_request,
-                    user=user,
-                    invoice_file_id=invoice_file_id if invoice_file_id else None
-                )
-
-        # Для AJAX запросов возвращаем JSON
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'text/html' not in request.headers.get('Accept', ''):
-            return {"success": True, "request_id": payment_request.id}
-
-        # Для обычных форм - редирект
-        return RedirectResponse('/dashboard', status_code=303)
-
-    @app.post("/api/upload")
-    @require_auth
-    async def upload_file(sess, request, file: UploadFile):
-        """Загрузка файла в служебный чат Telegram
-
-        Returns:
-            JSON с file_id или ошибкой
-        """
-        user_id = sess.get('user_id')
-
-        # Проверяем что пользователь существует
-        async with get_session() as session:
-            user = await UserCRUD.get_user_by_id(session, user_id)
-            if not user:
-                return {"success": False, "error": "User not found"}
-
-        try:
-            # Читаем содержимое файла
-            file_bytes = await file.read()
-
-            # Проверяем размер файла (максимум 20MB для Telegram)
-            if len(file_bytes) > 20 * 1024 * 1024:
-                return {"success": False, "error": "File too large (max 20MB)"}
-
-            # Загружаем файл в служебный чат
-            file_id = await upload_file_to_storage(
-                bot_token=config.bot_token,
-                storage_chat_id=config.storage_chat_id,
-                file_bytes=file_bytes,
-                filename=file.filename or "document"
-            )
-
-            if not file_id:
-                return {"success": False, "error": "Failed to upload file to Telegram"}
-
-            logger.info(f"User {user_id} uploaded file {file.filename}, file_id: {file_id}")
-            return {"success": True, "file_id": file_id, "filename": file.filename}
-
-        except Exception as e:
-            logger.error(f"Error uploading file: {e}")
-            return {"success": False, "error": str(e)}
-
-    @app.get("/users")
-    @require_auth
-    @require_role(UserRole.OWNER.value)
-    async def users_list(sess):
-        """Список всех пользователей (только для Owner)"""
-        user_id = sess.get('user_id')
-        display_name = sess.get('display_name')
-        role = sess.get('role')
-
-        async with get_session() as session:
-            current_user = await UserCRUD.get_user_by_id(session, user_id)
-            users = await UserCRUD.get_all_users(session)
-
-        content = Div(
-            Div(
-                H1("Управление пользователями", cls="text-3xl font-bold"),
-                A("+ Создать пользователя", href="/users/create", cls="btn btn-primary"),
-                cls="flex justify-between items-center mb-6"
-            ),
-
-            Div(
-                Div(
-                    user_table(users),
-                    cls="card-body p-0"
-                ),
-                cls="card bg-base-100 shadow-xl"
-            )
-        )
-
-        # Получаем аватар из Telegram
-        avatar_url = await get_user_profile_photo_url(config.bot_token, current_user.telegram_id) if current_user else None
-        if not avatar_url:
-            avatar_url = get_fallback_avatar_url(display_name)
-
-        return page_layout("Управление пользователями", content, display_name, role, avatar_url)
-
-    @app.get("/payment/{request_id}")
-    @require_auth
-    async def payment_detail(sess, request_id: int):
-        """Детальная страница запроса на оплату"""
-        user_id = sess.get('user_id')
-        display_name = sess.get('display_name')
-        role = sess.get('role')
-
-        async with get_session() as session:
-            current_user = await UserCRUD.get_user_by_id(session, user_id)
-            payment_request = await PaymentRequestCRUD.get_payment_request_by_id(session, request_id)
-
-            if not payment_request:
-                return RedirectResponse('/dashboard', status_code=303)
-
-            # Worker может видеть только свои запросы
-            if role == UserRole.WORKER.value and payment_request.created_by_id != user_id:
-                return RedirectResponse('/dashboard', status_code=303)
-
-        content = payment_request_detail(payment_request, role)
-
-        # Получаем аватар из Telegram
-        avatar_url = await get_user_profile_photo_url(config.bot_token, current_user.telegram_id) if current_user else None
-        if not avatar_url:
-            avatar_url = get_fallback_avatar_url(display_name)
-
-        return page_layout(
-            f"Запрос на оплату #{request_id}",
-            content,
-            display_name,
-            role,
-            avatar_url
-        )
-
-    @app.post("/payment/{request_id}/schedule")
-    @require_auth
-    @require_role(UserRole.OWNER.value, UserRole.MANAGER.value)
-    async def schedule_payment(sess, request_id: int, schedule_type: str, scheduled_date: str = None):
-        """Планирование оплаты"""
-        user_id = sess.get('user_id')
-
-        async with get_session() as session:
-            if schedule_type == "today":
-                await PaymentRequestCRUD.schedule_payment(
-                    session=session,
-                    request_id=request_id,
-                    processing_by_id=user_id,
-                    is_today=True
-                )
-            else:
-                # Парсим дату из строки формата YYYY-MM-DD
-                from datetime import datetime
-                scheduled_date_obj = datetime.strptime(scheduled_date, "%Y-%m-%d").date()
-                await PaymentRequestCRUD.schedule_payment(
-                    session=session,
-                    request_id=request_id,
-                    processing_by_id=user_id,
-                    scheduled_date=scheduled_date_obj
-                )
-
-            logger.info(f"User {user_id} запланировал оплату запроса #{request_id}")
-
-        return RedirectResponse(f'/payment/{request_id}', status_code=303)
-
-    @app.post("/payment/{request_id}/pay")
-    @require_auth
-    @require_role(UserRole.OWNER.value, UserRole.MANAGER.value)
-    async def mark_payment_as_paid(sess, request_id: int):
-        """Отметка запроса как оплаченного (без загрузки файла)"""
-        user_id = sess.get('user_id')
-
-        async with get_session() as session:
-            # Временно используем пустой file_id, т.к. загрузка файла будет через бот
-            # В будущем это можно улучшить
-            await PaymentRequestCRUD.mark_as_paid(
-                session=session,
-                request_id=request_id,
-                paid_by_id=user_id,
-                payment_proof_file_id="web_payment",  # Временная заглушка
-                processing_by_id=user_id
-            )
-
-            logger.info(f"User {user_id} отметил запрос #{request_id} как оплаченный")
-
-        return RedirectResponse(f'/payment/{request_id}', status_code=303)
-
-    @app.post("/payment/{request_id}/cancel")
-    @require_auth
-    async def cancel_payment(sess, request_id: int):
-        """Отмена запроса на оплату"""
-        user_id = sess.get('user_id')
-        role = sess.get('role')
-
-        async with get_session() as session:
-            payment_request = await PaymentRequestCRUD.get_payment_request_by_id(session, request_id)
-
-            if not payment_request:
-                return RedirectResponse('/dashboard', status_code=303)
-
-            # Worker может отменять только свои запросы
-            if role == UserRole.WORKER.value and payment_request.created_by_id != user_id:
-                return RedirectResponse('/dashboard', status_code=303)
-
-            await PaymentRequestCRUD.cancel_payment_request(session, request_id)
-            logger.info(f"User {user_id} отменил запрос #{request_id}")
-
-        return RedirectResponse('/dashboard', status_code=303)
-
-    @app.get("/users/{user_id}/edit")
-    @require_auth
-    @require_role(UserRole.OWNER.value)
-    async def user_edit_page(sess, user_id: int):
-        """Страница редактирования пользователя (только для Owner)"""
-        current_user_id = sess.get('user_id')
-        display_name = sess.get('display_name')
-        role = sess.get('role')
-
-        async with get_session() as session:
-            current_user = await UserCRUD.get_user_by_id(session, current_user_id)
-            user_to_edit = await UserCRUD.get_user_by_id(session, user_id)
-
-            if not user_to_edit:
-                return RedirectResponse('/users', status_code=303)
-
-        content = Div(
-            A("← Назад к списку пользователей", href="/users", cls="btn btn-ghost btn-sm mb-4"),
-            card(f"Редактирование пользователя: {user_to_edit.display_name}", user_edit_form(user_to_edit))
-        )
-
-        # Получаем аватар из Telegram
-        avatar_url = await get_user_profile_photo_url(config.bot_token, current_user.telegram_id) if current_user else None
-        if not avatar_url:
-            avatar_url = get_fallback_avatar_url(display_name)
-
-        return page_layout(
-            "Редактирование пользователя",
-            content,
-            display_name,
-            role,
-            avatar_url
-        )
-
-    @app.post("/users/{user_id}/edit")
-    @require_auth
-    @require_role(UserRole.OWNER.value)
-    async def user_edit_submit(
-        sess,
-        user_id: int,
-        display_name: str,
-        telegram_username: str,
-        tracker_login: str,
-        role: str,
-        is_billing_contact: str = None
-    ):
-        """Сохранение изменений пользователя"""
-        current_user_id = sess.get('user_id')
-
-        async with get_session() as session:
-            # Обновляем данные пользователя
-            await UserCRUD.update_user(
-                session=session,
-                user_id=user_id,
-                display_name=display_name,
-                telegram_username=telegram_username.lstrip("@"),
-                tracker_login=tracker_login if tracker_login else None,
-                role=UserRole(role),
-                is_billing_contact=(is_billing_contact == "true")
-            )
-
-            logger.info(f"Owner {current_user_id} обновил данные пользователя #{user_id}")
-
-        return RedirectResponse('/users', status_code=303)
-
-    @app.get("/users/create")
-    @require_auth
-    @require_role(UserRole.OWNER.value)
-    async def user_create_page(sess):
-        """Страница создания нового пользователя (только для Owner)"""
-        current_user_id = sess.get('user_id')
-        display_name = sess.get('display_name')
-        role = sess.get('role')
-
-        async with get_session() as session:
-            current_user = await UserCRUD.get_user_by_id(session, current_user_id)
-
-        content = Div(
-            A("← Назад к списку пользователей", href="/users", cls="btn btn-ghost btn-sm mb-4"),
-            card("Создание нового пользователя", user_create_form())
-        )
-
-        # Получаем аватар из Telegram
-        avatar_url = await get_user_profile_photo_url(config.bot_token, current_user.telegram_id) if current_user else None
-        if not avatar_url:
-            avatar_url = get_fallback_avatar_url(display_name)
-
-        return page_layout(
-            "Создание пользователя",
-            content,
-            display_name,
-            role,
-            avatar_url
-        )
-
-    @app.post("/users/create")
-    @require_auth
-    @require_role(UserRole.OWNER.value)
-    async def user_create_submit(
-        sess,
-        display_name: str,
-        telegram_username: str,
-        tracker_login: str,
-        role: str,
-        is_billing_contact: str = None
-    ):
-        """Создание нового пользователя"""
-        current_user_id = sess.get('user_id')
-
-        async with get_session() as session:
-            # Создаем нового пользователя
-            new_user = await UserCRUD.create_user(
-                session=session,
-                telegram_username=telegram_username.lstrip("@"),
-                display_name=display_name,
-                role=UserRole(role),
-                tracker_login=tracker_login if tracker_login else None,
-                is_billing_contact=(is_billing_contact == "true")
-            )
-
-            logger.info(f"Owner {current_user_id} создал нового пользователя #{new_user.id}")
-
-        return RedirectResponse('/users', status_code=303)
-
-    @app.get("/payment/{request_id}/download/invoice")
-    @require_auth
-    async def download_invoice(sess, request_id: int):
-        """Скачивание счета"""
-        user_id = sess.get('user_id')
-        role = sess.get('role')
-
-        async with get_session() as session:
-            payment_request = await PaymentRequestCRUD.get_payment_request_by_id(session, request_id)
-
-            if not payment_request:
-                return RedirectResponse('/dashboard', status_code=303)
-
-            # Worker может скачивать только свои файлы
-            if role == UserRole.WORKER.value and payment_request.created_by_id != user_id:
-                return RedirectResponse('/dashboard', status_code=303)
-
-            if not payment_request.invoice_file_id:
-                return RedirectResponse(f'/payment/{request_id}', status_code=303)
-
-            # Получаем URL файла из Telegram
-            import httpx
-            async with httpx.AsyncClient() as client:
-                # Получаем информацию о файле
-                file_response = await client.get(
-                    f"https://api.telegram.org/bot{config.bot_token}/getFile",
-                    params={"file_id": payment_request.invoice_file_id}
-                )
-
-                if file_response.status_code != 200:
-                    logger.error(f"Не удалось получить файл счета для запроса #{request_id}")
-                    return RedirectResponse(f'/payment/{request_id}', status_code=303)
-
-                file_data = file_response.json()
-                if not file_data.get("ok"):
-                    return RedirectResponse(f'/payment/{request_id}', status_code=303)
-
-                file_path = file_data["result"]["file_path"]
-                file_url = f"https://api.telegram.org/file/bot{config.bot_token}/{file_path}"
-
-                # Редирект на файл
-                return RedirectResponse(file_url, status_code=303)
-
-    @app.get("/payment/{request_id}/download/proof")
-    @require_auth
-    async def download_payment_proof(sess, request_id: int):
-        """Скачивание платежки"""
-        user_id = sess.get('user_id')
-        role = sess.get('role')
-
-        async with get_session() as session:
-            payment_request = await PaymentRequestCRUD.get_payment_request_by_id(session, request_id)
-
-            if not payment_request:
-                return RedirectResponse('/dashboard', status_code=303)
-
-            # Worker может скачивать только свои файлы
-            if role == UserRole.WORKER.value and payment_request.created_by_id != user_id:
-                return RedirectResponse('/dashboard', status_code=303)
-
-            if not payment_request.payment_proof_file_id:
-                return RedirectResponse(f'/payment/{request_id}', status_code=303)
-
-            # Получаем URL файла из Telegram
-            import httpx
-            async with httpx.AsyncClient() as client:
-                # Получаем информацию о файле
-                file_response = await client.get(
-                    f"https://api.telegram.org/bot{config.bot_token}/getFile",
-                    params={"file_id": payment_request.payment_proof_file_id}
-                )
-
-                if file_response.status_code != 200:
-                    logger.error(f"Не удалось получить файл платежки для запроса #{request_id}")
-                    return RedirectResponse(f'/payment/{request_id}', status_code=303)
-
-                file_data = file_response.json()
-                if not file_data.get("ok"):
-                    return RedirectResponse(f'/payment/{request_id}', status_code=303)
-
-                file_path = file_data["result"]["file_path"]
-                file_url = f"https://api.telegram.org/file/bot{config.bot_token}/{file_path}"
-
-                # Редирект на файл
-                return RedirectResponse(file_url, status_code=303)
+    return page_layout(f"{role.upper()} Dashboard", content, user.display_name, user.role.value, avatar_url)

@@ -1,7 +1,10 @@
 """Основное веб-приложение FastHTML для YaTackerHelper"""
 
 import logging
+import os
+from pathlib import Path
 from fasthtml.common import *
+from starlette.staticfiles import StaticFiles
 from web.config import WebConfig
 from web.database import init_database
 
@@ -30,6 +33,11 @@ app = FastHTML(
         Script(src="https://telegram.org/js/telegram-widget.js?22", _async=True),
     )
 )
+
+# Настройка статических файлов
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
 # Импортируем маршруты

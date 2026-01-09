@@ -51,7 +51,8 @@
       "mcp__context7__query-docs",
       "Bash(powershell -Command \"(Get-Content ''C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\web\\routes\\dashboard.py'' | Measure-Object -Line).Lines\")",
       "Bash(del \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\main.py\")",
-      "Bash(Remove-Item \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\main.py\")"
+      "Bash(Remove-Item \"C:\\Users\\defaultuser0.DESKTOP-JVJ7AUP\\Desktop\\Coding\\BrandMaster\\YaTackerHelper\\bot\\main.py\")",
+      "Bash(powershell -Command \"Get-ChildItem web\\routes\\*.py | ForEach-Object { Write-Host $_Name '':'' (Get-Content $_FullName).Count ''lines'' }\")"
     ],
     "deny": [],
     "ask": []

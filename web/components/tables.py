@@ -1,0 +1,154 @@
+"""Table компоненты"""
+
+from typing import List, Optional
+from fasthtml.common import *
+from bot.database.models import PaymentRequest, User, UserRole
+from .cards import status_badge
+from .pagination import pagination_footer
+
+
+def payment_request_row(request: PaymentRequest, show_creator: bool = False) -> Tr:
+    """Строка таблицы запроса на оплату"""
+    created_date = request.created_at.strftime("%d.%m.%Y %H:%M")
+
+    # Формируем строку создателя если нужно
+    creator_cell = Td(request.created_by.display_name) if show_creator else None
+
+    # Формируем дату оплаты или планируемую дату
+    date_info = ""
+    if request.paid_at:
+        date_info = request.paid_at.strftime("%d.%m.%Y %H:%M")
+    elif request.scheduled_date:
+        date_info = request.scheduled_date.strftime("%d.%m.%Y")
+
+    # Иконки для счета и платежки
+    invoice_icon = (
+        A("📥", href=f"/payment/{request.id}/download/invoice", title="Скачать счет", cls="text-lg", onclick="event.stopPropagation()")
+        if request.invoice_file_id
+        else Span("❌", cls="text-lg opacity-50")
+    )
+
+    payment_proof_icon = (
+        A("📥", href=f"/payment/{request.id}/download/proof", title="Скачать платежку", cls="text-lg", onclick="event.stopPropagation()")
+        if request.payment_proof_file_id
+        else Span("❌", cls="text-lg opacity-50")
+    )
+
+    return Tr(
+        Th(str(request.id)),
+        Td(request.title),
+        creator_cell,
+        Td(f"{request.amount} ₽"),
+        Td(status_badge(request.status)),
+        Td(invoice_icon),
+        Td(payment_proof_icon),
+        Td(created_date),
+        Td(date_info if date_info else "-"),
+        cls="hover cursor-pointer",
+        onclick=f"window.location.href='/payment/{request.id}'"
+    )
+
+
+def payment_request_table(requests: List[PaymentRequest], show_creator: bool = False, pagination_data: Optional[dict] = None) -> Div:
+    """Таблица запросов на оплату с пагинацией"""
+    if not requests:
+        return Div(
+            P("Нет запросов", cls="text-center py-8 text-gray-500"),
+            id="table-container"
+        )
+
+    # Заголовок с колонкой создателя если нужно
+    creator_header = Th("Создатель") if show_creator else None
+
+    table_content = Div(
+        Table(
+            Thead(
+                Tr(
+                    Th("ID"),
+                    Th("Название"),
+                    creator_header,
+                    Th("Сумма"),
+                    Th("Статус"),
+                    Th("Счет"),
+                    Th("Платежка"),
+                    Th("Создано"),
+                    Th("Дата оплаты")
+                )
+            ),
+            Tbody(
+                *[payment_request_row(req, show_creator) for req in requests]
+            ),
+            cls="table table-xs"
+        ),
+        cls="overflow-x-auto"
+    )
+
+    # Добавляем пагинацию если данные переданы
+    if pagination_data:
+        return Div(
+            table_content,
+            pagination_footer(
+                current_page=pagination_data['current_page'],
+                total_pages=pagination_data['total_pages'],
+                per_page=pagination_data['per_page'],
+                total_items=pagination_data['total_items'],
+                filter_status=pagination_data['filter_status']
+            ),
+            id="table-container"
+        )
+
+    return Div(table_content, id="table-container")
+
+
+def user_row(user: User) -> Tr:
+    """Строка таблицы пользователя"""
+    role_badge_colors = {
+        UserRole.OWNER: "badge-error",
+        UserRole.MANAGER: "badge-warning",
+        UserRole.WORKER: "badge-info",
+    }
+
+    # Преобразуем строку в enum если нужно
+    role = user.role if isinstance(user.role, UserRole) else UserRole(user.role)
+    badge_color = role_badge_colors.get(role, "badge-ghost")
+
+    return Tr(
+        Th(str(user.id)),
+        Td(user.display_name),
+        Td(f"@{user.telegram_username}"),
+        Td(Span(role.value.upper(), cls=f"badge {badge_color}")),
+        Td("Да" if user.is_billing_contact else "Нет"),
+        Td(user.created_at.strftime("%d.%m.%Y")),
+        Td(
+            A("Редактировать", href=f"/users/{user.id}/edit", cls="btn btn-xs btn-ghost")
+        )
+    )
+
+
+def user_table(users: List[User]) -> Div:
+    """Таблица пользователей"""
+    if not users:
+        return Div(
+            P("Нет пользователей", cls="text-center py-8 text-gray-500")
+        )
+
+    return Div(
+        Table(
+            Thead(
+                Tr(
+                    Th("ID"),
+                    Th("ФИО"),
+                    Th("Username"),
+                    Th("Роль"),
+                    Th("Плательщик"),
+                    Th("Создан"),
+                    Th("Действия")
+                )
+            ),
+            Tbody(
+                *[user_row(user) for user in users]
+            ),
+            cls="table table-xs"
+        ),
+        cls="overflow-x-auto"
+    )
