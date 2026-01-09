@@ -60,7 +60,7 @@ def setup_export_routes(app, config: WebConfig):
                     session=session,
                     user_id=user_id,
                     statuses=statuses if statuses else None,
-                    search=search if search else None,
+                    search_query=search if search else None,
                     date_from=date_from if date_from else None,
                     date_to=date_to if date_to else None,
                     date_type=date_type,
@@ -74,7 +74,7 @@ def setup_export_routes(app, config: WebConfig):
                 requests_list = await PaymentRequestCRUD.get_payment_requests_advanced(
                     session=session,
                     statuses=statuses if statuses else None,
-                    search=search if search else None,
+                    search_query=search if search else None,
                     date_from=date_from if date_from else None,
                     date_to=date_to if date_to else None,
                     date_type=date_type,
