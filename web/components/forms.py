@@ -397,9 +397,9 @@ def user_edit_form(user: User) -> Form:
         Div(
             Label("Роль", cls="label"),
             Select(
-                Option("OWNER", value=UserRole.OWNER.value, selected=user.role == UserRole.OWNER),
-                Option("MANAGER", value=UserRole.MANAGER.value, selected=user.role == UserRole.MANAGER),
-                Option("WORKER", value=UserRole.WORKER.value, selected=user.role == UserRole.WORKER),
+                Option("👑 Владелец", value=UserRole.OWNER.value, selected=user.role == UserRole.OWNER),
+                Option("📊 Менеджер", value=UserRole.MANAGER.value, selected=user.role == UserRole.MANAGER),
+                Option("👷 Сотрудник", value=UserRole.WORKER.value, selected=user.role == UserRole.WORKER),
                 name="role",
                 required=True,
                 cls="select select-bordered w-full"
@@ -410,7 +410,6 @@ def user_edit_form(user: User) -> Form:
         # Плательщик
         Div(
             Label(
-                Span("Плательщик", cls="label-text"),
                 Input(
                     type_="checkbox",
                     name="is_billing_contact",
@@ -418,7 +417,8 @@ def user_edit_form(user: User) -> Form:
                     checked=user.is_billing_contact,
                     cls="toggle toggle-primary"
                 ),
-                cls="label cursor-pointer justify-between"
+                Span("Плательщик", cls="label-text"),
+                cls="label cursor-pointer gap-4"
             ),
             cls="form-control mb-4"
         ),
@@ -480,9 +480,9 @@ def user_create_form() -> Form:
         Div(
             Label("Роль", cls="label"),
             Select(
-                Option("WORKER", value=UserRole.WORKER.value, selected=True),
-                Option("MANAGER", value=UserRole.MANAGER.value),
-                Option("OWNER", value=UserRole.OWNER.value),
+                Option("👷 Сотрудник", value=UserRole.WORKER.value, selected=True),
+                Option("📊 Менеджер", value=UserRole.MANAGER.value),
+                Option("👑 Владелец", value=UserRole.OWNER.value),
                 name="role",
                 required=True,
                 cls="select select-bordered w-full"
@@ -493,14 +493,14 @@ def user_create_form() -> Form:
         # Плательщик
         Div(
             Label(
-                Span("Плательщик", cls="label-text"),
                 Input(
                     type_="checkbox",
                     name="is_billing_contact",
                     value="true",
                     cls="toggle toggle-primary"
                 ),
-                cls="label cursor-pointer justify-between"
+                Span("Плательщик", cls="label-text"),
+                cls="label cursor-pointer gap-4"
             ),
             cls="form-control mb-4"
         ),
