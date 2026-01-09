@@ -136,25 +136,27 @@ def payment_request_table(requests: List[PaymentRequest], show_creator: bool = F
 def user_row(user: User) -> Tr:
     """Строка таблицы пользователя"""
     role_badge_colors = {
-        UserRole.OWNER: "badge-error",
-        UserRole.MANAGER: "badge-warning",
-        UserRole.WORKER: "badge-info",
+        UserRole.OWNER: ("badge-error badge-outline", "👑"),
+        UserRole.MANAGER: ("badge-warning badge-outline", "📊"),
+        UserRole.WORKER: ("badge-info badge-outline", "👷"),
     }
 
     # Преобразуем строку в enum если нужно
     role = user.role if isinstance(user.role, UserRole) else UserRole(user.role)
-    badge_color = role_badge_colors.get(role, "badge-ghost")
+    badge_color, role_icon = role_badge_colors.get(role, ("badge-ghost", "👤"))
+
+    # Иконка плательщика
+    billing_icon = "✅" if user.is_billing_contact else "❌"
 
     return Tr(
         Th(str(user.id)),
         Td(user.display_name),
-        Td(f"@{user.telegram_username}"),
-        Td(Span(role.value.upper(), cls=f"badge {badge_color}")),
-        Td("Да" if user.is_billing_contact else "Нет"),
-        Td(user.created_at.strftime("%d.%m.%Y")),
-        Td(
-            A("Редактировать", href=f"/users/{user.id}/edit", cls="btn btn-xs btn-ghost")
-        )
+        Td(f"@{user.telegram_username}" if user.telegram_username else "-"),
+        Td(Span(f"{role_icon} {role.value.upper()}", cls=f"badge {badge_color}")),
+        Td(billing_icon, cls="text-center"),
+        Td(user.created_at.strftime("%d.%m.%Y") if user.created_at else "-"),
+        cls="hover cursor-pointer",
+        onclick=f"window.location.href='/users/{user.id}/edit'"
     )
 
 
@@ -162,26 +164,29 @@ def user_table(users: List[User]) -> Div:
     """Таблица пользователей"""
     if not users:
         return Div(
-            P("Нет пользователей", cls="text-center py-8 text-gray-500")
+            P("Нет пользователей", cls="text-center py-8 text-gray-500"),
+            id="users-table-container"
         )
 
     return Div(
-        Table(
-            Thead(
-                Tr(
-                    Th("ID"),
-                    Th("ФИО"),
-                    Th("Username"),
-                    Th("Роль"),
-                    Th("Плательщик"),
-                    Th("Создан"),
-                    Th("Действия")
-                )
+        Div(
+            Table(
+                Thead(
+                    Tr(
+                        Th("ID"),
+                        Th("ФИО"),
+                        Th("Username"),
+                        Th("Роль"),
+                        Th("Плательщик"),
+                        Th("Создан")
+                    )
+                ),
+                Tbody(
+                    *[user_row(user) for user in users]
+                ),
+                cls="table table-xs"
             ),
-            Tbody(
-                *[user_row(user) for user in users]
-            ),
-            cls="table table-xs"
+            cls="overflow-x-auto"
         ),
-        cls="overflow-x-auto"
+        id="users-table-container"
     )
