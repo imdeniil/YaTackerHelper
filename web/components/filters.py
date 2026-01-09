@@ -76,8 +76,7 @@ def advanced_filters(
                                 id="status-summary-text"
                             ),
                             Span("▼", cls="ml-auto", id="status-arrow", style="font-size: 0.75rem;"),
-                            cls="btn btn-sm btn-outline w-full justify-between",
-                            style="text-align: left;"
+                            cls="input input-sm input-bordered w-full flex items-center justify-between cursor-pointer"
                         ),
                         Ul(
                             Li(
@@ -153,8 +152,7 @@ def advanced_filters(
                                 id="creator-summary-text"
                             ),
                             Span("▼", cls="ml-auto", id="creator-arrow", style="font-size: 0.75rem;"),
-                            cls="btn btn-sm btn-outline w-full justify-between",
-                            style="text-align: left;",
+                            cls="input input-sm input-bordered w-full flex items-center justify-between cursor-pointer",
                             onclick="toggleCreatorArrow()"
                         ),
                         Ul(
