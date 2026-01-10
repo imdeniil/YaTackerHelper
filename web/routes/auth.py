@@ -65,59 +65,45 @@ def setup_auth_routes(app, config: WebConfig):
                 Title("Вход - YaTackerHelper"),
                 Meta(charset="utf-8"),
                 Meta(name="viewport", content="width=device-width, initial-scale=1"),
+                Style("""
+                    body {
+                        margin: 0;
+                        min-height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background: #f5f5f5;
+                    }
+                """),
             ),
             Body(
-                Div(
-                    Div(
-                        H1("YaTackerHelper", cls="text-4xl font-bold mb-2"),
-                        P("Система управления запросами на оплату", cls="text-gray-600 mb-8"),
+                # Telegram Login Widget
+                Script(f"""
+                    window.onTelegramAuth = function(user) {{
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = '/auth/telegram';
 
-                        Div(
-                            H2("Вход через Telegram", cls="text-2xl font-semibold mb-4"),
-                            P("Для доступа к системе необходимо авторизоваться через Telegram",
-                              cls="mb-6 text-gray-700"),
+                        for (const key in user) {{
+                            const input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = key;
+                            input.value = user[key];
+                            form.appendChild(input);
+                        }}
 
-                            # Telegram Login Widget
-                            Script(f"""
-                                window.onTelegramAuth = function(user) {{
-                                    // Отправляем данные на сервер для проверки
-                                    const form = document.createElement('form');
-                                    form.method = 'POST';
-                                    form.action = '/auth/telegram';
-
-                                    for (const key in user) {{
-                                        const input = document.createElement('input');
-                                        input.type = 'hidden';
-                                        input.name = key;
-                                        input.value = user[key];
-                                        form.appendChild(input);
-                                    }}
-
-                                    document.body.appendChild(form);
-                                    form.submit();
-                                }};
-                            """),
-
-                            Div(
-                                Script(
-                                    src="https://telegram.org/js/telegram-widget.js?22",
-                                    data_telegram_login="bmyatrackerv2bot",
-                                    data_size="large",
-                                    data_onauth="onTelegramAuth(user)",
-                                    data_request_access="write",
-                                    _async=True
-                                ),
-                                cls="flex justify-center"
-                            ),
-
-                            cls="card bg-base-100 shadow-xl p-8"
-                        ),
-
-                        cls="max-w-md mx-auto"
-                    ),
-                    cls="hero min-h-screen bg-base-200"
+                        document.body.appendChild(form);
+                        form.submit();
+                    }};
+                """),
+                Script(
+                    src="https://telegram.org/js/telegram-widget.js?22",
+                    data_telegram_login="bmyatrackerv2bot",
+                    data_size="large",
+                    data_onauth="onTelegramAuth(user)",
+                    data_request_access="write",
+                    _async=True
                 ),
-                data_theme="light"
             )
         )
 
